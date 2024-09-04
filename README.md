@@ -10,3 +10,4 @@ This app is inspired by and uses components from the [MOTU Simple Control Panel]
 # Resources
 
 * [Create QR codes to link to specific pages](https://qr.io/?gad_source=1&gclid=Cj0KCQjw2ou2BhCCARIsANAwM2Foj3xuU22vQvYHm1j5nSIhCL1I0NzoNgpxReLyFZ1YOOXrvMoR7ysaAubkEALw_wcB)
+* For Datastore API, see [MOTU AVB Datastore API Docs](https://cdn-data.motu.com/downloads/audio/AVB/docs/MOTU%20AVB%20Web%20API.pdf)

@@ -1,22 +1,31 @@
-import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:motu_control/api/motu.dart';
-import 'package:motu_control/components/aux_channel.dart';
-import 'package:motu_control/components/channel.dart';
+import 'package:motu_control/screens/send_screen.dart';
+import 'package:motu_control/screens/error_screen.dart';
+import 'package:motu_control/screens/mixer_screen.dart';
+import 'package:motu_control/screens/waiting_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
+import 'package:motu_control/components/server_chooser.dart';
 
-final _router = GoRouter(routes: [
-  GoRoute(
-    path: "/",
-    builder: (context, state) => const MainPage("0"),
-  ),
-  GoRoute(
-      path: "/aux/:aux",
-      builder: (context, state) => MainPage(state.pathParameters["aux"] ?? "0"))
-]);
+final int clientId = ApiPolling.getClientId();
+
+enum Page { mixer, group, aux, reverb }
+
+final _router = GoRouter(
+  initialLocation: "/mixer/0",
+  routes: [
+    GoRoute(
+      path: "/:page/:channel",
+      builder: (context, state) => MainPage(
+        page: Page.values
+            .firstWhere((e) => e.name == state.pathParameters["page"]),
+        channel: state.pathParameters["channel"] ?? "0",
+      ),
+    ),
+  ],
+);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,65 +40,40 @@ class MOTUControlPanel extends StatelessWidget {
     return MaterialApp.router(
       title: 'MOTU Control Panel',
       theme: ThemeData(
-          primarySwatch: Colors.red,
-          brightness: Brightness.light,
-          scaffoldBackgroundColor: const Color(0xFF1F2022)),
+        primarySwatch: Colors.red,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF1F2022),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Color(0xFF1F2022),
+        ),
+        menuTheme: const MenuThemeData(
+          style: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll(
+              Color(0xFF1F2022),
+            ),
+          ),
+        ),
+      ),
       themeMode: ThemeMode.system,
       routerConfig: _router,
     );
   }
 }
 
-// Channel
-// /chan/0/matrix/solo
-// /chan/0/matrix/mute
-// /chan/0/matrix/pan
-// /chan/0/matrix/fader
-
-// /chan/0/matrix/reverb/send
-// /chan/0/matrix/reverb/pan
-
-// Aux Send
-// /chan/1/matrix/aux/0/send
-// /chan/1/matrix/aux/0/pan
-// /aux/1/matrix/mute
-// /aux/1/matrix/panner
-// /aux/1/matrix/fader
-
-// Group Send
-// /chan/1/matrix/group/0/send
-// /chan/1/matrix/group/0/pan
-// /group/1/matrix/aux/1/send
-
-// Reverb
-
-// /reverb/0/matrix/aux/1/send
-
-final List<Map<String, dynamic>> auxChannels = [
-  {"channel": 0, "type": "chan"},
-  {"channel": 1, "type": "chan"},
-  {"channel": 2, "type": "chan"},
-  {"channel": 3, "type": "chan"},
-  {"channel": 4, "type": "chan"},
-  {"channel": 6, "type": "chan"},
-  {"channel": 8, "type": "chan"},
-  {"channel": 10, "type": "chan"},
-  {"channel": 12, "type": "chan"},
-  {"channel": 14, "type": "chan"},
-  {"channel": 16, "type": "chan"},
-  {"channel": 18, "type": "chan"},
-  {"channel": 20, "type": "chan"},
-  {"channel": 22, "type": "chan"},
-  {"channel": 23, "type": "chan"},
-  {"channel": 35, "type": "chan"},
-  {"channel": 0, "type": "group"},
-  {"channel": 0, "type": "reverb"},
-];
+getSharedPreferences() async {
+  return await SharedPreferences.getInstance();
+}
 
 class MainPage extends StatefulWidget {
-  final String aux;
+  final String channel;
+  final Page page;
 
-  const MainPage(this.aux, {super.key});
+  const MainPage({
+    super.key,
+    this.page = Page.mixer,
+    this.channel = "0",
+  });
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -97,50 +81,11 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   ApiPolling? apiPollingInstance;
-  Stream<Map<String, dynamic>>? apiPollingStream;
-  String? apiBaseUrl;
 
-  getSharedPreferences() async {
-    return await SharedPreferences.getInstance();
-  }
-
-  Future<void> _showMyDialog(SharedPreferences prefs) async {
-    final myController = TextEditingController();
-
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Insert your MOTU interface API URL'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                const Text('It should look like this:'),
-                const Text('http://localhost:1280/some-characters/datastore'),
-                TextField(
-                  controller: myController,
-                  decoration: const InputDecoration(
-                    hintText: 'URL',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Save'),
-              onPressed: () {
-                if (myController.text.isNotEmpty) {
-                  prefs.setString('apiBaseUrl', myController.text);
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
+  void createPollingInstance(String apiBaseUrl) {
+    setState(() {
+      apiPollingInstance = ApiPolling(apiBaseUrl, clientId: clientId);
+    });
   }
 
   @override
@@ -148,30 +93,19 @@ class _MainPageState extends State<MainPage> {
     super.initState();
 
     // Get App preferences
-    getSharedPreferences().then((prefs) async {
-      if (prefs.getString('apiBaseUrl') == null) {
-        log('Missing apiBaseUrl, request to user...');
+    getSharedPreferences().then(
+      (prefs) async {
+        if (prefs.getString('apiBaseUrl') == null) {
+          log('Missing apiBaseUrl, request to user...');
 
-        await _showMyDialog(prefs).then((value) {
-          apiBaseUrl = prefs.getString('apiBaseUrl');
-          setState(() {
-            apiPollingInstance = ApiPolling(apiBaseUrl!);
-            apiPollingStream = apiPollingInstance!.stream;
+          await showServerChooser(context, prefs).then((value) {
+            createPollingInstance(prefs.getString('apiBaseUrl'));
           });
-        });
-      } else {
-        apiBaseUrl = prefs.getString('apiBaseUrl');
-        setState(() {
-          apiPollingInstance = ApiPolling(apiBaseUrl!);
-          apiPollingStream = apiPollingInstance!.stream;
-        });
-      }
-    });
-    // apiBaseUrl = "http://localhost:8888/datastore/";
-    // setState(() {
-    //   apiPollingInstance = ApiPolling(apiBaseUrl!);
-    //   apiPollingStream = apiPollingInstance!.stream;
-    // });
+        } else {
+          createPollingInstance(prefs.getString('apiBaseUrl'));
+        }
+      },
+    );
   }
 
   @override
@@ -180,180 +114,153 @@ class _MainPageState extends State<MainPage> {
     super.dispose();
   }
 
-  List<Widget> buildAuxFaders(
-    AsyncSnapshot<Map<String, dynamic>> snapshot,
-  ) {
-    List<Widget> children;
-    List<Widget> faders = [];
-
-    // Determine which aux mix is active.
-    // Generally they are 2 channels for Left and Right, so always
-    // take the Odd (Left) channel.
-    int aux = int.parse(widget.aux);
-    if (aux % 2 > 0) {
-      aux -= 1;
-    }
-
-    // Iterate the auxChannels dictionary to dynamically
-    // generate the fader row.
-    for (Map<String, dynamic> channel in auxChannels) {
-      String name = "<No Name>";
-      if (channel["type"] == "chan") {
-        name = apiPollingInstance!.getMixerChannelName(channel["channel"]);
-      } else if (channel["type"] == "group") {
-        name = apiPollingInstance!.getGroupName(channel["channel"]);
-      } else if (channel["type"] == "reverb") {
-        name = apiPollingInstance!.getReverbName(channel["channel"]);
-      }
-
-      faders.add(
-        AuxChannel(name, aux, channel["channel"], snapshot.data!,
-            apiPollingInstance!.setDouble,
-            prefix: channel["type"]),
-      );
-    }
-    faders.add(
-      const SizedBox(width: 20),
-    );
-
-    // Add the output fader for the aux mix
-    faders.add(Channel(
-      "Output",
-      aux,
-      snapshot.data!,
-      apiPollingInstance!.toggleBoolean,
-      apiPollingInstance!.setDouble,
-      prefix: "aux",
-    ));
-
-    // Build the page: Logo, Row, Faders
-    children = [
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
-            child: SvgPicture.asset(
-              'assets/motu-logo.svg',
-              width: 120,
-            ),
-          ),
-        ],
-      ),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            "Aux: ${apiPollingInstance!.getAuxName(aux)}",
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 20),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-            mainAxisSize: MainAxisSize.max,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: faders),
-      ),
-    ];
-
-    return children;
-  }
-
-  /// Buiild the page from the AVB datastore snapshot
-  List<Widget> buildFromSnapshot(
-    BuildContext context,
-    AsyncSnapshot<Map<String, dynamic>> snapshot,
-  ) {
-    List<Widget> children;
-
-    switch (snapshot.connectionState) {
-      case ConnectionState.none:
-        children = [];
-        break;
-      case ConnectionState.waiting:
-        children = [
-          const SizedBox(
-            width: 60,
-            height: 60,
-            child: CircularProgressIndicator(),
-          ),
-          const SizedBox(
-            height: 20,
-          ),
-          const Text(
-            'Connecting to MOTU',
-            style: TextStyle(color: Colors.white),
-          )
-        ];
-        break;
-      case ConnectionState.active:
-        // For now we're just looking at aux mixes (based on the route)
-        // We could in future also create faders for groups and main mixes.
-        children = buildAuxFaders(snapshot);
-        break;
-      case ConnectionState.done:
-        // Since we are Long Polling, connection should never be "done".
-        children = [];
-        break;
-    }
-
-    return children;
-  }
-
-  Widget buildFromStream(
-    BuildContext context,
-    AsyncSnapshot<Map<String, dynamic>> snapshot,
-  ) {
-    List<Widget> children;
-
-    if (snapshot.hasError) {
-      children = [
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Text('Error: ${snapshot.error}'),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text('Stack trace: ${snapshot.stackTrace}'),
-        ),
-      ];
-    } else {
-      children = buildFromSnapshot(
-        context,
-        snapshot,
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: children,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-          padding: const EdgeInsets.fromLTRB(40.0, 40.0, 40.0, 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              Expanded(
-                child: StreamBuilder<Map<String, dynamic>>(
-                  stream: apiPollingStream!,
-                  builder: buildFromStream,
-                ),
-              ),
-            ],
-          )),
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: apiPollingInstance!.stream,
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<Map<String, dynamic>> snapshot,
+      ) {
+        if (snapshot.hasError) {
+          return ErrorScreen(snapshot);
+        } else {
+          // Fader visibility is stored in browser local storage at touch-console_faderVisibility
+
+          Map<int, List<int>> auxInputList = {
+            0: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            2: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            4: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            6: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            8: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            10: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+            12: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+          };
+
+          Map<int, List<int>> groupInputList = {
+            0: [24, 25, 26, 27, 28, 29, 30, 31, 32, 34],
+            2: [],
+            4: [],
+          };
+          List<int> groupList = [0, 2, 4];
+          List<int> auxList = [0, 2, 4, 6, 8, 10, 12];
+
+          Map<int, List<Map<String, dynamic>>> auxInputChannels = {};
+          for (MapEntry<int, List<int>> channel in auxInputList.entries) {
+            auxInputChannels[channel.key] = channel.value
+                .map((input) => {
+                      "channel": input,
+                      "type": "chan",
+                      "name": apiPollingInstance!.getMixerChannelName(input)
+                    })
+                .toList();
+          }
+
+          Map<int, List<Map<String, dynamic>>> groupChannels = {};
+
+          for (MapEntry<int, List<int>> channel in groupInputList.entries) {
+            groupChannels[channel.key] = channel.value
+                .map((input) => {
+                      "channel": input,
+                      "type": "chan",
+                      "name": apiPollingInstance!.getMixerChannelName(input)
+                    })
+                .toList();
+          }
+
+          List<int> allInputsList =
+              apiPollingInstance!.getChannelList("obank", "Mix In");
+
+          final List<Map<String, dynamic>> allInputChannels = [];
+          for (int channel in allInputsList) {
+            allInputChannels.add({
+              "channel": channel,
+              "type": "chan",
+              "name": apiPollingInstance!.getMixerChannelName(channel)
+            });
+          }
+
+          List<Map<String, dynamic>> groups = groupList
+              .map((int channel) => {
+                    "channel": channel,
+                    "type": "group",
+                    "name": apiPollingInstance!.getGroupName(channel)
+                  })
+              .toList();
+
+          final List<Map<String, dynamic>> reverbChannels = [0]
+              .map((channel) => {
+                    "channel": channel,
+                    "type": "reverb",
+                    "name": apiPollingInstance!.getReverbName(channel)
+                  })
+              .toList();
+
+          List<Map<String, dynamic>> auxes = [];
+          for (int channel in auxList) {
+            auxes.add({
+              "channel": channel,
+              "type": "aux",
+              "name": apiPollingInstance!.getAuxName(channel)
+            });
+          }
+
+          switch (snapshot.connectionState) {
+            case ConnectionState.none:
+            case ConnectionState.waiting:
+            case ConnectionState.done:
+              return const WaitingScreen();
+            case ConnectionState.active:
+              {
+                switch (widget.page) {
+                  case Page.aux:
+                    int auxChannel = int.tryParse(widget.channel) ?? 0;
+                    List<Map<String, dynamic>> inputChannels =
+                        auxInputChannels[auxChannel]!;
+
+                    inputChannels.addAll(groups.toList());
+                    inputChannels.addAll(reverbChannels.toList());
+                    return SendScreen(
+                      sendType: "aux",
+                      activeSends: auxes,
+                      inputChannels: inputChannels,
+                      channel: auxChannel,
+                      apiPollingInstance: apiPollingInstance!,
+                      snapshot: snapshot,
+                    );
+                  case Page.group:
+                    int groupChannel = int.tryParse(widget.channel) ?? 0;
+                    return SendScreen(
+                      sendType: "group",
+                      activeSends: groups,
+                      inputChannels: groupChannels[groupChannel]!,
+                      channel: groupChannel,
+                      apiPollingInstance: apiPollingInstance!,
+                      snapshot: snapshot,
+                    );
+                  case Page.reverb:
+                    return SendScreen(
+                      sendType: "reverb",
+                      activeSends: reverbChannels,
+                      inputChannels: allInputChannels,
+                      channel: int.tryParse(widget.channel) ?? 0,
+                      apiPollingInstance: apiPollingInstance!,
+                      snapshot: snapshot,
+                    );
+                  default:
+                    // TODO: add buttons to go to group/reverb/aux screens, with back button to return to previous page
+                    return MixerScreen(
+                      inputChannels: allInputChannels + groups + reverbChannels,
+                      apiPollingInstance: apiPollingInstance!,
+                      groups: groups,
+                      auxes: auxes,
+                      snapshot: snapshot,
+                    );
+                }
+              }
+          }
+        }
+      },
     );
   }
 }

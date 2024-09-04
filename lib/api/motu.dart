@@ -20,23 +20,40 @@ final Logger logger = Logger(
 class ApiPolling {
   String apiBaseUrl;
   bool _isRequestInProgress = false;
+  bool _closed = false;
   Timer? _timer;
 
-  // Client ID is a randomly generated integer between 0 and 2^32-1
-  final int clientId = Random().nextInt(pow(2, 32).toInt() - 1);
+  int? _clientId;
+  int? get clientId => _clientId;
+
   final _controller = StreamController<Map<String, dynamic>>();
   Stream<Map<String, dynamic>> get stream => _controller.stream;
 
   String apiETag = "";
   Map<String, dynamic> datastore = {};
 
-  ApiPolling(this.apiBaseUrl) {
+  ApiPolling(this.apiBaseUrl, {int? clientId}) {
+    logger.i("ApiPolling: New ApiPolling instance");
+    _clientId = clientId ?? getClientId();
     // Fetch data in a continuous loop.
     resetTimer();
   }
 
+  /// Client ID is a randomly generated integer between 0 and 2^32-1
+  static int getClientId() {
+    int newClientId = Random().nextInt(pow(2, 32).toInt() - 1);
+    logger.i("ApiPolling.getClientId: New ClientId: $newClientId");
+    return newClientId;
+  }
+
   void resetTimer() {
     _timer?.cancel();
+
+    if (_closed) {
+      logger.e("ApiPolling.resetTimer: $clientId: Controller is closed.");
+      throw "Controller is closed";
+    }
+
     _timer = Timer(const Duration(seconds: 1), () {
       fetchData();
     });
@@ -47,6 +64,17 @@ class ApiPolling {
     _timer = null;
   }
 
+  void closeStream() {
+    _controller.close();
+    _closed = true;
+  }
+
+  void dispose() {
+    logger.i("ApiPolling.dispose: Disposing ApiPolling instance.");
+    closeStream();
+    stopPolling();
+  }
+
   void _updateDatastore(Map<String, dynamic> newValues) {
     // Merge incoming updates into datastore overwriting existing matching keys
     Map<String, dynamic> combinedMap = {...datastore, ...newValues};
@@ -55,9 +83,19 @@ class ApiPolling {
     _controller.sink.add(combinedMap);
   }
 
+  Uri getUri(String apiEndpoint) {
+    return Uri.parse('$apiBaseUrl/$apiEndpoint?client=$clientId');
+  }
+
   void fetchData() async {
-    if (_isRequestInProgress) return; // Prevent overlapping requests
+    String logPrefix = "ApiPolling.fetchData: $clientId";
+    if (_isRequestInProgress) {
+      logger.w("$logPrefix: Request is already in progress.");
+      return; // Prevent overlapping requests
+    }
+
     _isRequestInProgress = true;
+    bool shouldResetTimer = true;
 
     try {
       // Long polling request to the Motu AVB Datastore API
@@ -78,34 +116,39 @@ class ApiPolling {
         headers: headers,
       );
 
+      if (_controller.isClosed | _closed) {
+        logger.w(
+            "$logPrefix: Controller was closed before response was received.");
+        shouldResetTimer = false;
+        return;
+      }
+
       // Update stored ETag that later will be sent to the API for updates check
       apiETag = response.headers['etag'] ?? apiETag;
-
-      logger.i(
-        "ApiPolling: Response Status: ${response.statusCode}. ETag: $apiETag",
-      );
 
       // 304 means no updates since last check
       // 200 means there's data, so update the local store.
       if (response.statusCode == 200) {
         try {
+          logger.i(
+            "$logPrefix: New Data Received. New ETag: $apiETag",
+          );
           _updateDatastore(jsonDecode(response.body));
         } catch (e) {
-          logger.e("Error decoding JSON", e);
+          logger.e("$logPrefix: Error decoding JSON: '${response.body}'", e);
         }
       } else if (response.statusCode == 304) {
-        logger.d("No new updates from the server.");
+        logger.d(
+            "$logPrefix: No new updates from the server. New ETag: $apiETag");
       }
     } catch (error, stacktrace) {
-      logger.e("Error fetching data", error, stacktrace);
+      logger.e("$logPrefix: Error fetching data", error, stacktrace);
     } finally {
       _isRequestInProgress = false;
-      resetTimer();
+      if (shouldResetTimer) {
+        resetTimer();
+      }
     }
-  }
-
-  Uri getUri(String apiEndpoint) {
-    return Uri.parse('$apiBaseUrl/$apiEndpoint?client=$clientId');
   }
 
   void _setValue(String apiEndpoint, dynamic value) async {
@@ -142,20 +185,50 @@ class ApiPolling {
     _setValue(apiEndpoint, newValue);
   }
 
-  String getChannelName(String bankType, String bankName, int channel) {
+  int? getBankNumber(String bankType, String bankName) {
     List<String> banks =
         datastore["ext/${bankType}DisplayOrder"]?.toString().split(":") ?? [];
 
     for (String bank in banks) {
       if (datastore["ext/$bankType/$bank/name"] == bankName) {
-        String name = datastore["ext/$bankType/$bank/ch/$channel/name"] ?? "";
-        if (name.isEmpty) {
-          name = datastore["ext/$bankType/$bank/ch/$channel/defaultName"] ?? "";
-        }
-        return name;
+        return int.parse(bank);
       }
     }
-    return "<Not Found>";
+    return null;
+  }
+
+  String getChannelName(String bankType, String bankName, int channel) {
+    int? bank = getBankNumber(bankType, bankName);
+    if (bank == null) {
+      return "<Not Found>";
+    }
+
+    String name = datastore["ext/$bankType/$bank/ch/$channel/name"] ?? "";
+    if (name.isEmpty) {
+      name = datastore["ext/$bankType/$bank/ch/$channel/defaultName"] ?? "";
+    }
+    return name;
+  }
+
+  List<int> getChannelList(String bankType, String bankName) {
+    int? bank = getBankNumber(bankType, bankName);
+    if (bank == null) {
+      return [];
+    }
+    int? numCh = datastore["ext/$bankType/$bank/userCh"];
+    if (numCh == null) {
+      return [];
+    }
+    List<int> channels = [];
+    for (int i = 0; i < numCh; i++) {
+      // mix/chan/6/config/format -> 2:0 / 2:1 if stereo, 1:0 if mono
+      List<String> format =
+          datastore["mix/chan/$i/config/format"].split(":") ?? ["1", "0"];
+      if (format[0] == "1" || (format[0] == "2" && format[1] == "0")) {
+        channels.add(i);
+      }
+    }
+    return channels;
   }
 
   String getInputChannelName(String bank, int channel) {
@@ -184,15 +257,5 @@ class ApiPolling {
 
   String getMixerChannelName(int channel) {
     return getOutputChannelName("Mix In", channel).replaceAll(r" L", "");
-  }
-
-  void dispose() {
-    logger.i("Disposing ApiPolling instance.");
-    closeStream();
-    stopPolling();
-  }
-
-  void closeStream() {
-    _controller.close();
   }
 }

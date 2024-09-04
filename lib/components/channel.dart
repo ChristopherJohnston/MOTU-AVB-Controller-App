@@ -9,6 +9,8 @@ class Channel extends StatelessWidget {
   final int channelNumber;
   final Map<String, dynamic> snapshotData;
   final String prefix;
+  final String outputPrefix;
+  final int outputChannel;
 
   final Function(String, double) toggleBoolean;
   final Function(String, double) valueChanged;
@@ -21,14 +23,26 @@ class Channel extends StatelessWidget {
     this.valueChanged, {
     super.key,
     this.prefix = "chan",
+    this.outputPrefix = "input",
+    this.outputChannel = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    String mutePath = 'mix/$prefix/$channelNumber/matrix/mute';
-    String faderPath = 'mix/$prefix/$channelNumber/matrix/fader';
-    String panPath = 'mix/$prefix/$channelNumber/matrix/pan';
+    String faderPath = "mix/$prefix/$channelNumber/matrix/";
+    faderPath += (outputPrefix == "input")
+        ? "fader"
+        : "$outputPrefix/$outputChannel/send";
 
+    String panPath = "mix/$prefix/$channelNumber/matrix/";
+    panPath += (["input", "main"].contains(outputPrefix))
+        ? "pan"
+        : "$outputPrefix/$outputChannel/pan";
+
+    String soloPath = 'mix/$prefix/$channelNumber/matrix/solo';
+    String mutePath = 'mix/$prefix/$channelNumber/matrix/mute';
+
+    double soloValue = snapshotData[soloPath] ?? 0.0;
     double muteValue = snapshotData[mutePath] ?? 0.0;
     double faderValue = snapshotData[faderPath] ?? inputForMinusInfdB;
     double panValue = snapshotData[panPath] ?? 0.0;
@@ -44,19 +58,34 @@ class Channel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        IconToggleButton(
-          label: "",
-          icon: Icons.mic_off,
-          activeColor: const Color(0xFFFF0000),
-          inactiveColor: const Color.fromRGBO(147, 147, 147, 1),
-          active: muteValue == 1.0 ? true : false,
-          onPressed: () {
-            toggleBoolean(
-              mutePath,
-              muteValue,
-            );
-          },
-        ),
+        Row(children: [
+          IconToggleButton(
+            label: "",
+            icon: Icons.mic_off,
+            activeColor: const Color(0xFFFF0000),
+            inactiveColor: const Color.fromRGBO(147, 147, 147, 1),
+            active: muteValue == 1.0 ? true : false,
+            onPressed: () {
+              toggleBoolean(
+                mutePath,
+                muteValue,
+              );
+            },
+          ),
+          IconToggleButton(
+            label: "",
+            icon: Icons.settings_voice,
+            activeColor: const Color.fromARGB(255, 150, 182, 10),
+            inactiveColor: const Color.fromRGBO(147, 147, 147, 1),
+            active: soloValue == 1.0 ? true : false,
+            onPressed: () {
+              toggleBoolean(
+                soloPath,
+                soloValue,
+              );
+            },
+          ),
+        ]),
         Fader(
           sliderHeight: 440,
           value: faderValue,
@@ -68,6 +97,8 @@ class Channel extends StatelessWidget {
           },
         ),
         const SizedBox(height: 20),
+        // TODO: Stereo channels do not have a panner.
+        // Add Mono/Stereo indicator and show/hide panner
         Panner(
           min: -1.0,
           max: 1.0,

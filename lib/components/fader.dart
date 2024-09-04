@@ -84,7 +84,8 @@ class Fader extends StatelessWidget {
       onDoubleTap: () {
         if (valueChanged != null) {
           // Set value to 1.0 on double-tap (0 dB)
-          valueChanged!(inputFor0dB);
+          valueChanged!(
+              (value == inputFor0dB) ? inputForMinusInfdB : inputFor0dB);
         }
       },
       child: SliderTheme(
