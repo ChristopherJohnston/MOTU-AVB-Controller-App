@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/screens/channel_screen.dart';
 import 'package:motu_control/screens/send_screen.dart';
 import 'package:motu_control/screens/error_screen.dart';
 import 'package:motu_control/screens/mixer_screen.dart';
@@ -9,9 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:motu_control/components/server_chooser.dart';
 
-final int clientId = ApiPolling.getClientId();
+final int clientId = MotuDatastoreApi.getClientId();
 
-enum Page { mixer, group, aux, reverb }
+enum Page { chan, mixer, group, aux, reverb }
 
 final _router = GoRouter(
   initialLocation: "/mixer/0",
@@ -80,11 +81,11 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  ApiPolling? apiPollingInstance;
+  MotuDatastoreApi? datastoreApiInstance;
 
   void createPollingInstance(String apiBaseUrl) {
     setState(() {
-      apiPollingInstance = ApiPolling(apiBaseUrl, clientId: clientId);
+      datastoreApiInstance = MotuDatastoreApi(apiBaseUrl, clientId: clientId);
     });
   }
 
@@ -110,14 +111,17 @@ class _MainPageState extends State<MainPage> {
 
   @override
   void dispose() {
-    apiPollingInstance?.dispose();
+    datastoreApiInstance?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (datastoreApiInstance == null) {
+      return const WaitingScreen(message: "Waiting for server URL");
+    }
     return StreamBuilder<Map<String, dynamic>>(
-      stream: apiPollingInstance!.stream,
+      stream: datastoreApiInstance!.stream,
       builder: (
         BuildContext context,
         AsyncSnapshot<Map<String, dynamic>> snapshot,
@@ -151,7 +155,7 @@ class _MainPageState extends State<MainPage> {
                 .map((input) => {
                       "channel": input,
                       "type": "chan",
-                      "name": apiPollingInstance!.getMixerChannelName(input)
+                      "name": datastoreApiInstance!.getMixerChannelName(input)
                     })
                 .toList();
           }
@@ -163,20 +167,20 @@ class _MainPageState extends State<MainPage> {
                 .map((input) => {
                       "channel": input,
                       "type": "chan",
-                      "name": apiPollingInstance!.getMixerChannelName(input)
+                      "name": datastoreApiInstance!.getMixerChannelName(input)
                     })
                 .toList();
           }
 
           List<int> allInputsList =
-              apiPollingInstance!.getChannelList("obank", "Mix In");
+              datastoreApiInstance!.getChannelList("obank", "Mix In");
 
           final List<Map<String, dynamic>> allInputChannels = [];
           for (int channel in allInputsList) {
             allInputChannels.add({
               "channel": channel,
               "type": "chan",
-              "name": apiPollingInstance!.getMixerChannelName(channel)
+              "name": datastoreApiInstance!.getMixerChannelName(channel)
             });
           }
 
@@ -184,7 +188,7 @@ class _MainPageState extends State<MainPage> {
               .map((int channel) => {
                     "channel": channel,
                     "type": "group",
-                    "name": apiPollingInstance!.getGroupName(channel)
+                    "name": datastoreApiInstance!.getGroupName(channel)
                   })
               .toList();
 
@@ -192,7 +196,7 @@ class _MainPageState extends State<MainPage> {
               .map((channel) => {
                     "channel": channel,
                     "type": "reverb",
-                    "name": apiPollingInstance!.getReverbName(channel)
+                    "name": datastoreApiInstance!.getReverbName(channel)
                   })
               .toList();
 
@@ -201,7 +205,7 @@ class _MainPageState extends State<MainPage> {
             auxes.add({
               "channel": channel,
               "type": "aux",
-              "name": apiPollingInstance!.getAuxName(channel)
+              "name": datastoreApiInstance!.getAuxName(channel)
             });
           }
 
@@ -213,6 +217,18 @@ class _MainPageState extends State<MainPage> {
             case ConnectionState.active:
               {
                 switch (widget.page) {
+                  case Page.chan:
+                    int inputChannelNum = int.tryParse(widget.channel) ?? 0;
+                    Map<String, dynamic> inputChannel = allInputChannels
+                        .firstWhere((e) => e["channel"] == inputChannelNum);
+
+                    return ChannelScreen(
+                      inputChannel: inputChannel,
+                      datastoreApiInstance: datastoreApiInstance!,
+                      snapshot: snapshot,
+                      groups: groups,
+                      auxes: auxes,
+                    );
                   case Page.aux:
                     int auxChannel = int.tryParse(widget.channel) ?? 0;
                     List<Map<String, dynamic>> inputChannels =
@@ -225,33 +241,34 @@ class _MainPageState extends State<MainPage> {
                       activeSends: auxes,
                       inputChannels: inputChannels,
                       channel: auxChannel,
-                      apiPollingInstance: apiPollingInstance!,
+                      datastoreApiInstance: datastoreApiInstance!,
                       snapshot: snapshot,
                     );
                   case Page.group:
                     int groupChannel = int.tryParse(widget.channel) ?? 0;
                     return SendScreen(
                       sendType: "group",
+                      headerIcon: Icons.group,
                       activeSends: groups,
                       inputChannels: groupChannels[groupChannel]!,
                       channel: groupChannel,
-                      apiPollingInstance: apiPollingInstance!,
+                      datastoreApiInstance: datastoreApiInstance!,
                       snapshot: snapshot,
                     );
                   case Page.reverb:
                     return SendScreen(
                       sendType: "reverb",
+                      headerIcon: Icons.double_arrow,
                       activeSends: reverbChannels,
                       inputChannels: allInputChannels,
                       channel: int.tryParse(widget.channel) ?? 0,
-                      apiPollingInstance: apiPollingInstance!,
+                      datastoreApiInstance: datastoreApiInstance!,
                       snapshot: snapshot,
                     );
                   default:
-                    // TODO: add buttons to go to group/reverb/aux screens, with back button to return to previous page
                     return MixerScreen(
                       inputChannels: allInputChannels + groups + reverbChannels,
-                      apiPollingInstance: apiPollingInstance!,
+                      datastoreApiInstance: datastoreApiInstance!,
                       groups: groups,
                       auxes: auxes,
                       snapshot: snapshot,

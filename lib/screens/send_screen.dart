@@ -58,7 +58,7 @@ Widget buildSendFaders(
   int channel,
   String sendType,
   List<Map<String, dynamic>> inputChannels,
-  ApiPolling apiPollingInstance,
+  MotuDatastoreApi datastoreApiInstance,
   AsyncSnapshot<Map<String, dynamic>> snapshot,
 ) {
   List<Widget> children;
@@ -73,7 +73,7 @@ Widget buildSendFaders(
         inputChannel["channel"],
         channel,
         snapshot.data!,
-        apiPollingInstance.setDouble,
+        datastoreApiInstance.setDouble,
         inputChannelPrefix: inputChannel["type"],
         outputChannelPrefix: sendType,
         channelClicked: (String inputChannelType, int channelNumber) {
@@ -94,8 +94,8 @@ Widget buildSendFaders(
     "Output",
     channel,
     snapshot.data!,
-    apiPollingInstance.toggleBoolean,
-    apiPollingInstance.setDouble,
+    datastoreApiInstance.toggleBoolean,
+    datastoreApiInstance.setDouble,
     prefix: sendType,
   ));
 
@@ -123,15 +123,17 @@ class SendScreen extends StatelessWidget {
   final String sendType;
   final List<Map<String, dynamic>> activeSends;
   final List<Map<String, dynamic>> inputChannels;
-  final ApiPolling apiPollingInstance;
+  final MotuDatastoreApi datastoreApiInstance;
   final AsyncSnapshot<Map<String, dynamic>> snapshot;
+  final IconData headerIcon;
 
   const SendScreen({
     required this.channel,
     required this.sendType,
+    this.headerIcon = Icons.headphones,
     required this.activeSends,
     required this.inputChannels,
-    required this.apiPollingInstance,
+    required this.datastoreApiInstance,
     required this.snapshot,
     super.key,
   });
@@ -139,24 +141,28 @@ class SendScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
-      title: SendHeader(
-        // Determine which mix is active.
-        // Generally they are 2 channels for Left and Right, so always
-        // take the Odd (Left) channel.
-        selectedChannel: (channel % 2 > 0) ? channel - 1 : channel,
-        channelChanged: (int? newValue) {
-          if (newValue != null) {
-            context.go('/$sendType/$newValue');
-          }
-        },
-        sends: activeSends,
-      ),
+      actions: [
+        SendHeader(
+          label: sendType,
+          iconData: headerIcon,
+          // Determine which mix is active.
+          // Generally they are 2 channels for Left and Right, so always
+          // take the Odd (Left) channel.
+          selectedChannel: (channel % 2 > 0) ? channel - 1 : channel,
+          channelChanged: (int? newValue) {
+            if (newValue != null) {
+              context.go('/$sendType/$newValue');
+            }
+          },
+          sends: activeSends,
+        )
+      ],
       body: buildSendFaders(
         context,
         channel,
         sendType,
         inputChannels,
-        apiPollingInstance,
+        datastoreApiInstance,
         snapshot,
       ),
     );

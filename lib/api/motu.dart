@@ -17,7 +17,7 @@ final Logger logger = Logger(
       ),
 );
 
-class ApiPolling {
+class MotuDatastoreApi {
   String apiBaseUrl;
   bool _isRequestInProgress = false;
   bool _closed = false;
@@ -32,7 +32,7 @@ class ApiPolling {
   String apiETag = "";
   Map<String, dynamic> datastore = {};
 
-  ApiPolling(this.apiBaseUrl, {int? clientId}) {
+  MotuDatastoreApi(this.apiBaseUrl, {int? clientId}) {
     logger.i("ApiPolling: New ApiPolling instance");
     _clientId = clientId ?? getClientId();
     // Fetch data in a continuous loop.
@@ -223,7 +223,7 @@ class ApiPolling {
     for (int i = 0; i < numCh; i++) {
       // mix/chan/6/config/format -> 2:0 / 2:1 if stereo, 1:0 if mono
       List<String> format =
-          datastore["mix/chan/$i/config/format"].split(":") ?? ["1", "0"];
+          datastore["mix/chan/$i/config/format"]?.split(":") ?? ["1", "0"];
       if (format[0] == "1" || (format[0] == "2" && format[1] == "0")) {
         channels.add(i);
       }

@@ -1,17 +1,16 @@
 import 'package:flutter_svg/svg.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-// import 'package:motu_control/api/motu.dart';
 
 class MainScaffold extends StatelessWidget {
+  final List<Widget> actions;
   final Widget? title;
   final Widget body;
-  // final ApiPolling? apiPollingInstance;
 
   const MainScaffold({
     super.key,
+    this.actions = const [],
     this.title,
-    // this.apiPollingInstance,
     required this.body,
   });
 
@@ -19,13 +18,19 @@ class MainScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        actions: actions,
         title: title ??
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
-              child: SvgPicture.asset(
-                'assets/motu-logo.svg',
-                width: 120,
-                color: Colors.white,
+            TextButton(
+              onPressed: () {
+                context.go('/mixer/0');
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
+                child: SvgPicture.asset(
+                  'assets/motu-logo.svg',
+                  width: 120,
+                  color: Colors.white,
+                ),
               ),
             ),
         leading: const DrawerButton(),
@@ -58,7 +63,7 @@ class MainScaffold extends StatelessWidget {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.mic),
+              leading: const Icon(Icons.settings_input_component),
               title: const Text('Mixer'),
               onTap: () {
                 Navigator.pop(context);
@@ -82,7 +87,7 @@ class MainScaffold extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.group),
+              leading: const Icon(Icons.double_arrow),
               title: const Text('Reverb'),
               onTap: () {
                 Navigator.pop(context);
@@ -101,7 +106,7 @@ class MainScaffold extends StatelessWidget {
             //   leading: const Icon(Icons.stop_circle),
             //   title: const Text('Stop Polling'),
             //   onTap: () {
-            //     apiPollingInstance?.stopPolling();
+            //     datastoreApiInstance?.stopPolling();
             //     Navigator.pop(context);
             //   },
             // ),

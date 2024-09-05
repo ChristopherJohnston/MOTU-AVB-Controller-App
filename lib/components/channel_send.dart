@@ -40,24 +40,20 @@ class ChannelSend extends StatelessWidget {
     double panValue = snapshotData[panPath] ?? 0.0;
 
     // For groups and reverbs we want to link to the relevant page
-    Widget header = Text(
-      name,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        color: Colors.white,
-      ),
-    );
-
-    header = TextButton(
+    Widget header = TextButton(
       onPressed: () {
         if (channelClicked != null) {
-          channelClicked!(
-              (inputChannelPrefix == "chan") ? "mixer" : inputChannelPrefix,
-              inputChannelNumber);
+          channelClicked!(inputChannelPrefix, inputChannelNumber);
         }
       },
-      child: header,
+      child: Text(
+        name,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+      ),
     );
 
     return Column(

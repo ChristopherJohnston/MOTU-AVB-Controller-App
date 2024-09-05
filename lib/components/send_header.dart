@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 
 class SendHeader extends StatelessWidget {
   final int selectedChannel;
   final Function(int?)? channelChanged;
   final List<Map<String, dynamic>> sends;
+  final String label;
+  final IconData iconData;
 
   const SendHeader({
     super.key,
     required this.selectedChannel,
     required this.sends,
+    this.label = "Channel",
+    this.iconData = Icons.headphones,
     this.channelChanged,
   });
 
@@ -18,19 +21,12 @@ class SendHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
-          child: SvgPicture.asset(
-            'assets/motu-logo.svg',
-            width: 120,
-            color: Colors.white,
-          ),
-        ),
         DropdownMenu<int>(
+          label: Text(label),
           initialSelection: selectedChannel,
           hintText: "Select an output.",
-          leadingIcon: const Icon(
-            Icons.headphones,
+          leadingIcon: Icon(
+            iconData,
             color: Colors.white,
           ),
           dropdownMenuEntries: sends.map(

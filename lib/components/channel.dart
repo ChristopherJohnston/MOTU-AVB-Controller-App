@@ -14,6 +14,7 @@ class Channel extends StatelessWidget {
 
   final Function(String, double) toggleBoolean;
   final Function(String, double) valueChanged;
+  final Function(String, int)? channelClicked;
 
   const Channel(
     this.name,
@@ -25,6 +26,7 @@ class Channel extends StatelessWidget {
     this.prefix = "chan",
     this.outputPrefix = "input",
     this.outputChannel = 0,
+    this.channelClicked,
   });
 
   @override
@@ -46,17 +48,32 @@ class Channel extends StatelessWidget {
     double muteValue = snapshotData[mutePath] ?? 0.0;
     double faderValue = snapshotData[faderPath] ?? inputForMinusInfdB;
     double panValue = snapshotData[panPath] ?? 0.0;
+    List<String> channelConfig =
+        snapshotData["mix/$prefix/$channelNumber/config/format"]?.split(":") ??
+            ["1", "0"];
+
+    bool isStereo = (channelConfig[0] == "2" ||
+        ["reverb", "group", "main", "monitor"].contains(prefix));
+
+    Widget header = TextButton(
+      onPressed: () {
+        if (channelClicked != null) {
+          channelClicked!(prefix, channelNumber);
+        }
+      },
+      child: Text(
+        name,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+      ),
+    );
 
     return Column(
       children: [
-        Text(
-          name,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
-          ),
-        ),
+        header,
         const SizedBox(height: 10),
         Row(children: [
           IconToggleButton(
@@ -97,19 +114,19 @@ class Channel extends StatelessWidget {
           },
         ),
         const SizedBox(height: 20),
-        // TODO: Stereo channels do not have a panner.
-        // Add Mono/Stereo indicator and show/hide panner
-        Panner(
-          min: -1.0,
-          max: 1.0,
-          value: panValue,
-          valueChanged: (value) => {
-            valueChanged(
-              panPath,
-              value,
-            )
-          },
-        ),
+        !isStereo
+            ? Panner(
+                min: -1.0,
+                max: 1.0,
+                value: panValue,
+                valueChanged: (value) => {
+                  valueChanged(
+                    panPath,
+                    value,
+                  )
+                },
+              )
+            : const Text("Stereo"),
         // IconToggleButton(
         //   label: "",
         //   icon: Icons.animation,

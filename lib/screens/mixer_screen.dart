@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:motu_control/api/motu.dart';
 import 'package:motu_control/components/channel.dart';
 import 'package:motu_control/components/main_scaffold.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:go_router/go_router.dart';
 
 // // Channel
 // // /chan/0/matrix/solo
@@ -35,7 +35,7 @@ Widget buildMixerFaders(
   BuildContext context,
   List<Map<String, dynamic>> inputChannels,
   List<Map<String, dynamic>> auxChannels,
-  ApiPolling apiPollingInstance,
+  MotuDatastoreApi datastoreApiInstance,
   AsyncSnapshot<Map<String, dynamic>> snapshot,
   String outputPrefix,
   int outputChannel,
@@ -50,11 +50,14 @@ Widget buildMixerFaders(
       inputChannel["name"],
       inputChannel["channel"],
       snapshot.data!,
-      apiPollingInstance.toggleBoolean,
-      apiPollingInstance.setDouble,
+      datastoreApiInstance.toggleBoolean,
+      datastoreApiInstance.setDouble,
       prefix: inputChannel["type"],
       outputPrefix: outputPrefix,
       outputChannel: outputChannel,
+      channelClicked: (String inputChannelType, int channelNumber) {
+        context.go('/$inputChannelType/$channelNumber');
+      },
     ));
   }
 
@@ -73,16 +76,16 @@ Widget buildMixerFaders(
       "Main",
       0,
       snapshot.data!,
-      apiPollingInstance.toggleBoolean,
-      apiPollingInstance.setDouble,
+      datastoreApiInstance.toggleBoolean,
+      datastoreApiInstance.setDouble,
       prefix: "main",
     ),
     Channel(
       "Monitor",
       0,
       snapshot.data!,
-      apiPollingInstance.toggleBoolean,
-      apiPollingInstance.setDouble,
+      datastoreApiInstance.toggleBoolean,
+      datastoreApiInstance.setDouble,
       prefix: "monitor",
     ),
     const SizedBox(width: 20),
@@ -94,9 +97,12 @@ Widget buildMixerFaders(
         a["name"],
         a["channel"],
         snapshot.data!,
-        apiPollingInstance.toggleBoolean,
-        apiPollingInstance.setDouble,
+        datastoreApiInstance.toggleBoolean,
+        datastoreApiInstance.setDouble,
         prefix: "aux",
+        channelClicked: (String inputChannelType, int channelNumber) {
+          context.go('/$inputChannelType/$channelNumber');
+        },
       );
     },
   ));
@@ -122,14 +128,14 @@ Widget buildMixerFaders(
 
 class MixerScreen extends StatefulWidget {
   final List<Map<String, dynamic>> inputChannels;
-  final ApiPolling apiPollingInstance;
+  final MotuDatastoreApi datastoreApiInstance;
   final List<Map<String, dynamic>> groups;
   final List<Map<String, dynamic>> auxes;
   final AsyncSnapshot<Map<String, dynamic>> snapshot;
 
   const MixerScreen({
     required this.inputChannels,
-    required this.apiPollingInstance,
+    required this.datastoreApiInstance,
     required this.snapshot,
     required this.groups,
     required this.auxes,
@@ -156,80 +162,74 @@ class _MixerScreenState extends State<MixerScreen> {
     List<Map<String, dynamic>> outputChannels = [
       {"prefix": "input", "name": "Input", "channel": 0, "icon": Icons.mic},
       {"prefix": "main", "name": "Main", "channel": 0, "icon": Icons.speaker},
-      {"prefix": "reverb", "name": "Reverb", "channel": 0, "icon": Icons.room},
+      {
+        "prefix": "reverb",
+        "name": "Reverb",
+        "channel": 0,
+        "icon": Icons.double_arrow
+      },
     ];
 
     return MainScaffold(
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
-            child: SvgPicture.asset(
-              'assets/motu-logo.svg',
-              width: 120,
-              color: Colors.white,
-            ),
+      actions: [
+        const Text("On Fader:"),
+        Row(
+          children: outputChannels.map((output) {
+            return IconButton(
+              onPressed: () =>
+                  onFaderChange(output["prefix"], output["channel"]),
+              icon: Icon(output["icon"] as IconData),
+              selectedIcon: Icon(
+                output["icon"] as IconData,
+                color: Colors.purple,
+              ),
+              hoverColor: Colors.purple.withAlpha(150),
+              highlightColor: Colors.purple,
+              isSelected: (outputPrefix == output["prefix"] &&
+                  outputChannel == output["channel"]),
+            );
+          }).toList(),
+        ),
+        DropdownMenu<int>(
+          hintText: "Select a Group.",
+          label: const Text("Group"),
+          leadingIcon: Icon(
+            Icons.group,
+            color: (outputPrefix == "group") ? Colors.purple : Colors.white,
           ),
-          const Text("On Fader:"),
-          Row(
-            children: outputChannels.map((output) {
-              return IconButton(
-                onPressed: () =>
-                    onFaderChange(output["prefix"], output["channel"]),
-                icon: Icon(output["icon"] as IconData),
-                selectedIcon: Icon(
-                  output["icon"] as IconData,
-                  color: Colors.purple,
-                ),
-                hoverColor: Colors.purple.withAlpha(150),
-                highlightColor: Colors.purple,
-                isSelected: (outputPrefix == output["prefix"] &&
-                    outputChannel == output["channel"]),
+          dropdownMenuEntries: widget.groups.map(
+            (Map<String, dynamic> group) {
+              return DropdownMenuEntry<int>(
+                value: group["channel"],
+                label: group["name"],
               );
-            }).toList(),
+            },
+          ).toList(),
+          onSelected: (int? value) => onFaderChange("group", value ?? 0),
+        ),
+        DropdownMenu<int>(
+          hintText: "Select an Aux.",
+          label: const Text("Aux"),
+          leadingIcon: Icon(
+            Icons.headphones,
+            color: (outputPrefix == "aux") ? Colors.purple : Colors.white,
           ),
-          DropdownMenu<int>(
-            hintText: "Select a Group.",
-            label: const Text("Group"),
-            leadingIcon: Icon(
-              Icons.headphones,
-              color: (outputPrefix == "group") ? Colors.purple : Colors.white,
-            ),
-            dropdownMenuEntries: widget.groups.map(
-              (Map<String, dynamic> group) {
-                return DropdownMenuEntry<int>(
-                  value: group["channel"],
-                  label: group["name"],
-                );
-              },
-            ).toList(),
-            onSelected: (int? value) => onFaderChange("group", value ?? 0),
-          ),
-          DropdownMenu<int>(
-            hintText: "Select an Aux.",
-            label: const Text("Aux"),
-            leadingIcon: Icon(
-              Icons.headphones,
-              color: (outputPrefix == "aux") ? Colors.purple : Colors.white,
-            ),
-            dropdownMenuEntries: widget.auxes.map(
-              (Map<String, dynamic> aux) {
-                return DropdownMenuEntry<int>(
-                  value: aux["channel"],
-                  label: aux["name"],
-                );
-              },
-            ).toList(),
-            onSelected: (int? value) => onFaderChange("aux", value ?? 0),
-          ),
-        ],
-      ),
+          dropdownMenuEntries: widget.auxes.map(
+            (Map<String, dynamic> aux) {
+              return DropdownMenuEntry<int>(
+                value: aux["channel"],
+                label: aux["name"],
+              );
+            },
+          ).toList(),
+          onSelected: (int? value) => onFaderChange("aux", value ?? 0),
+        ),
+      ],
       body: buildMixerFaders(
           context,
           widget.inputChannels,
           widget.auxes,
-          widget.apiPollingInstance,
+          widget.datastoreApiInstance,
           widget.snapshot,
           outputPrefix,
           outputChannel),
