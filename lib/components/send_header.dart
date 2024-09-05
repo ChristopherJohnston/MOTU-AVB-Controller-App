@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:motu_control/api/motu.dart';
 
 class SendHeader extends StatelessWidget {
   final int selectedChannel;
   final Function(int?)? channelChanged;
-  final List<Map<String, dynamic>> sends;
+  final List<ChannelDefinition> sends;
   final String label;
   final IconData iconData;
 
@@ -32,8 +33,8 @@ class SendHeader extends StatelessWidget {
           dropdownMenuEntries: sends.map(
             (entry) {
               return DropdownMenuEntry<int>(
-                value: entry["channel"],
-                label: entry["name"],
+                value: entry.index,
+                label: entry.name,
               );
             },
           ).toList(),

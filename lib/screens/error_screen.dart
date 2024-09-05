@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:motu_control/components/main_scaffold.dart';
+import 'package:motu_control/api/motu.dart';
 
 class ErrorScreen extends StatelessWidget {
-  final AsyncSnapshot<Map<String, dynamic>> snapshot;
+  final AsyncSnapshot<Datastore> snapshot;
 
   const ErrorScreen(
     this.snapshot, {

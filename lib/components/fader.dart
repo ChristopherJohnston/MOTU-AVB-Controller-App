@@ -1,5 +1,6 @@
-// import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/utils/db_slider_utils.dart';
 import 'package:motu_control/components/fader_components/fader_thumb_shape.dart';
 import 'fader_components/fader_track_shape.dart';
@@ -68,10 +69,12 @@ class Fader extends StatelessWidget {
   final double max = 1.0;
   final double value; // 0-4
   final Function(double)? valueChanged;
+  final ChannelType type;
 
   const Fader({
     this.sliderHeight = 48,
     this.value = 1.0,
+    this.type = ChannelType.chan,
     this.valueChanged,
     super.key,
   });
@@ -90,18 +93,18 @@ class Fader extends StatelessWidget {
       },
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
-          activeTrackColor: const Color(0xFFFF0000),
-          inactiveTrackColor: const Color(0XFF111111),
+          activeTrackColor: kFaderColors[type],
+          inactiveTrackColor: kFaderInactiveTrackColor,
           trackHeight: 5,
           trackShape: const FaderTrackShape(),
           thumbShape: const FaderThumbShape(
             thumbRadius: 15,
           ),
-          overlayColor: Colors.white.withOpacity(.1),
+          overlayColor: kFaderOverlayColor,
           tickMarkShape:
               const CustomRoundSliderTickMarkShape(tickMarkRadius: 3.0),
-          activeTickMarkColor: Colors.white,
-          inactiveTickMarkColor: Colors.grey,
+          activeTickMarkColor: kActiveFaderTickMarkColor,
+          inactiveTickMarkColor: kInactiveFaderTickMarkColor,
         ),
         child: Slider(
           value: sliderPosition,

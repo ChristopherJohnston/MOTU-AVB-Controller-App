@@ -17,6 +17,236 @@ final Logger logger = Logger(
       ),
 );
 
+enum ChannelType { chan, group, aux, reverb, main, monitor }
+
+enum ChannelValue { send, pan, fader, solo, mute }
+
+class ChannelDefinition {
+  final int index;
+  final ChannelType type;
+  final String name;
+
+  ChannelDefinition({
+    required this.index,
+    required this.type,
+    required this.name,
+  });
+}
+
+class Datastore {
+  Map<String, dynamic> _data;
+
+  Datastore() : _data = {};
+
+  void updateValue(path, value) {
+    _data[path] = value;
+  }
+
+  void updateValues(newValues) {
+    Map<String, dynamic> combinedMap = {..._data, ...newValues};
+    _data = combinedMap;
+  }
+
+  int? getBankNumber(String bankType, String bankName) {
+    List<String> banks =
+        _data["ext/${bankType}DisplayOrder"]?.toString().split(":") ?? [];
+
+    for (String bank in banks) {
+      if (_data["ext/$bankType/$bank/name"] == bankName) {
+        return int.parse(bank);
+      }
+    }
+    return null;
+  }
+
+  String getChannelName(String bankType, String bankName, int channel) {
+    int? bank = getBankNumber(bankType, bankName);
+    if (bank == null) {
+      return "<Not Found>";
+    }
+
+    String name = _data["ext/$bankType/$bank/ch/$channel/name"] ?? "";
+    if (name.isEmpty) {
+      name = _data["ext/$bankType/$bank/ch/$channel/defaultName"] ?? "";
+    }
+    return name;
+  }
+
+  List<int> getChannelFormat(ChannelType type, int index) {
+    // mix/chan/6/config/format -> 2:0 / 2:1 if stereo, 1:0 if mono
+    List<String> format =
+        _data["mix/${type.name}/$index/config/format"]?.split(":") ??
+            ["1", "0"];
+
+    return [int.tryParse(format[0]) ?? 1, int.tryParse(format[1]) ?? 0];
+  }
+
+  List<int> getChannelList(String bankType, String bankName) {
+    int? bank = getBankNumber(bankType, bankName);
+    if (bank == null) {
+      return [];
+    }
+    int? numCh = _data["ext/$bankType/$bank/userCh"];
+    if (numCh == null) {
+      return [];
+    }
+    List<int> channels = [];
+    for (int i = 0; i < numCh; i++) {
+      List<int> format = getChannelFormat(ChannelType.chan, i);
+      if (format[0] == 1 || (format[0] == 2 && format[1] == 0)) {
+        channels.add(i);
+      }
+    }
+    return channels;
+  }
+
+  String getInputChannelName(String bank, int channel) {
+    return getChannelName("ibank", bank, channel);
+  }
+
+  String getOutputChannelName(String bank, int channel) {
+    return getChannelName("obank", bank, channel);
+  }
+
+  String getAuxName(int channel) {
+    if (channel % 2 > 0) {
+      channel -= 1;
+    }
+    String auxName = getInputChannelName("Mix Aux", channel);
+    return auxName.replaceAll(r" L", "");
+  }
+
+  String getGroupName(int channel) {
+    return getInputChannelName("Mix Group", channel).replaceAll(r" L", "");
+  }
+
+  String getReverbName(int channel) {
+    return getInputChannelName("Mix Reverb", channel).replaceAll(r" L", "");
+  }
+
+  String getMixerChannelName(int channel) {
+    return getOutputChannelName("Mix In", channel).replaceAll(r" L", "");
+  }
+
+  // Mixer Channels
+
+  // // /chan/0/matrix/solo
+  // // /chan/0/matrix/mute
+  // // /chan/0/matrix/pan
+  // // /chan/0/matrix/fader
+
+  // // /aux/1/matrix/mute
+  // // /aux/1/matrix/panner
+  // // /aux/1/matrix/fader
+
+  String getChannelPath(
+      ChannelType type, int index, ChannelValue channelValue) {
+    return "mix/${type.name}/$index/matrix/${channelValue.name}";
+  }
+
+  double? getChannelDoubleValue(
+      ChannelType type, int index, ChannelValue channelValue) {
+    return _data[getChannelPath(type, index, channelValue)];
+  }
+
+  double? getChannelFaderValue(ChannelType type, int index) {
+    return getChannelDoubleValue(type, index, ChannelValue.fader);
+  }
+
+  double? getChannelPanValue(ChannelType type, int index) {
+    return getChannelDoubleValue(type, index, ChannelValue.pan);
+  }
+
+  bool? getChannelSoloValue(ChannelType type, int index) {
+    double? val = getChannelDoubleValue(type, index, ChannelValue.solo);
+    if (val != null) {
+      return val == 1.0;
+    }
+    return null;
+  }
+
+  bool? getChannelMuteValue(ChannelType type, int index) {
+    double? val = getChannelDoubleValue(type, index, ChannelValue.mute);
+    if (val != null) {
+      return val == 1.0;
+    }
+    return null;
+  }
+
+  // Output Channels
+
+  // // mix/chan/0/matrix/reverb/send
+  // // mix/chan/0/matrix/reverb/pan
+  // // mix/chan/1/matrix/aux/0/send
+  // // mix/chan/1/matrix/aux/0/pan
+
+  // // Group
+  // // mix/chan/1/matrix/group/0/send
+  // // mix/chan/1/matrix/group/0/pan
+  // // mix/group/1/matrix/aux/1/send
+
+  // // Reverb
+  // // /reverb/0/matrix/aux/1/send
+
+  // levels: http://1248.local/meters?meters=mix/level:ext/input
+
+  String getOutputPath(
+    ChannelType inputChannelType,
+    int inputChannelIndex,
+    ChannelType outputChannelType,
+    int outputChannelIndex,
+    ChannelValue channelValue,
+  ) {
+    return "mix/${inputChannelType.name}/$inputChannelIndex/matrix/${outputChannelType.name}/$outputChannelIndex/${channelValue.name}";
+  }
+
+  double? getOutputDoubleValue(
+    ChannelType inputChannelType,
+    int inputChannelIndex,
+    ChannelType outputChannelType,
+    int outputChannelIndex,
+    ChannelValue channelValue,
+  ) {
+    return _data[getOutputPath(
+      inputChannelType,
+      inputChannelIndex,
+      outputChannelType,
+      outputChannelIndex,
+      channelValue,
+    )];
+  }
+
+  double? getOutputPanValue(
+    ChannelType inputChannelType,
+    int inputChannelIndex,
+    ChannelType outputChannelType,
+    int outputChannelIndex,
+  ) {
+    return getOutputDoubleValue(
+      inputChannelType,
+      inputChannelIndex,
+      outputChannelType,
+      outputChannelIndex,
+      ChannelValue.pan,
+    );
+  }
+
+  double? getOutputSendValue(
+    ChannelType inputChannelType,
+    int inputChannelIndex,
+    ChannelType outputChannelType,
+    int outputChannelIndex,
+  ) {
+    return getOutputDoubleValue(
+      inputChannelType,
+      inputChannelIndex,
+      outputChannelType,
+      outputChannelIndex,
+      ChannelValue.send,
+    );
+  }
+}
+
 class MotuDatastoreApi {
   String apiBaseUrl;
   bool _isRequestInProgress = false;
@@ -26,11 +256,11 @@ class MotuDatastoreApi {
   int? _clientId;
   int? get clientId => _clientId;
 
-  final _controller = StreamController<Map<String, dynamic>>();
-  Stream<Map<String, dynamic>> get stream => _controller.stream;
+  final _controller = StreamController<Datastore>();
+  Stream<Datastore> get stream => _controller.stream;
 
   String apiETag = "";
-  Map<String, dynamic> datastore = {};
+  Datastore datastore = Datastore();
 
   MotuDatastoreApi(this.apiBaseUrl, {int? clientId}) {
     logger.i("ApiPolling: New ApiPolling instance");
@@ -77,10 +307,9 @@ class MotuDatastoreApi {
 
   void _updateDatastore(Map<String, dynamic> newValues) {
     // Merge incoming updates into datastore overwriting existing matching keys
-    Map<String, dynamic> combinedMap = {...datastore, ...newValues};
-    datastore = combinedMap;
+    datastore.updateValues(newValues);
     // Push the updated datastore
-    _controller.sink.add(combinedMap);
+    _controller.sink.add(datastore);
   }
 
   Uri getUri(String apiEndpoint) {
@@ -180,82 +409,8 @@ class MotuDatastoreApi {
     _setValue(apiEndpoint, value);
   }
 
-  void toggleBoolean(String apiEndpoint, double currentValue) async {
-    double newValue = (currentValue == 0.0) ? 1.0 : 0.0;
+  void toggleBoolean(String apiEndpoint, bool currentValue) async {
+    double newValue = (currentValue) ? 0.0 : 1.0;
     _setValue(apiEndpoint, newValue);
-  }
-
-  int? getBankNumber(String bankType, String bankName) {
-    List<String> banks =
-        datastore["ext/${bankType}DisplayOrder"]?.toString().split(":") ?? [];
-
-    for (String bank in banks) {
-      if (datastore["ext/$bankType/$bank/name"] == bankName) {
-        return int.parse(bank);
-      }
-    }
-    return null;
-  }
-
-  String getChannelName(String bankType, String bankName, int channel) {
-    int? bank = getBankNumber(bankType, bankName);
-    if (bank == null) {
-      return "<Not Found>";
-    }
-
-    String name = datastore["ext/$bankType/$bank/ch/$channel/name"] ?? "";
-    if (name.isEmpty) {
-      name = datastore["ext/$bankType/$bank/ch/$channel/defaultName"] ?? "";
-    }
-    return name;
-  }
-
-  List<int> getChannelList(String bankType, String bankName) {
-    int? bank = getBankNumber(bankType, bankName);
-    if (bank == null) {
-      return [];
-    }
-    int? numCh = datastore["ext/$bankType/$bank/userCh"];
-    if (numCh == null) {
-      return [];
-    }
-    List<int> channels = [];
-    for (int i = 0; i < numCh; i++) {
-      // mix/chan/6/config/format -> 2:0 / 2:1 if stereo, 1:0 if mono
-      List<String> format =
-          datastore["mix/chan/$i/config/format"]?.split(":") ?? ["1", "0"];
-      if (format[0] == "1" || (format[0] == "2" && format[1] == "0")) {
-        channels.add(i);
-      }
-    }
-    return channels;
-  }
-
-  String getInputChannelName(String bank, int channel) {
-    return getChannelName("ibank", bank, channel);
-  }
-
-  String getOutputChannelName(String bank, int channel) {
-    return getChannelName("obank", bank, channel);
-  }
-
-  String getAuxName(int channel) {
-    if (channel % 2 > 0) {
-      channel -= 1;
-    }
-    String auxName = getInputChannelName("Mix Aux", channel);
-    return auxName.replaceAll(r" L", "");
-  }
-
-  String getGroupName(int channel) {
-    return getInputChannelName("Mix Group", channel).replaceAll(r" L", "");
-  }
-
-  String getReverbName(int channel) {
-    return getInputChannelName("Mix Reverb", channel).replaceAll(r" L", "");
-  }
-
-  String getMixerChannelName(int channel) {
-    return getOutputChannelName("Mix In", channel).replaceAll(r" L", "");
   }
 }

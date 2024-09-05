@@ -3,6 +3,7 @@ import 'package:motu_control/components/fader.dart';
 import 'package:motu_control/components/panner.dart';
 import 'package:motu_control/components/icon_toggle_button.dart';
 import 'package:motu_control/utils/db_slider_utils.dart';
+import 'package:motu_control/api/motu.dart';
 
 ///
 /// Faders and Panners for channel sends
@@ -11,11 +12,11 @@ class ChannelSend extends StatelessWidget {
   final String name;
   final int inputChannelNumber;
   final int outputChannelNumber;
-  final Map<String, dynamic> snapshotData;
+  final Datastore snapshotData;
   final Function(String, double) valueChanged;
-  final String inputChannelPrefix;
-  final String outputChannelPrefix;
-  final Function(String, int)? channelClicked;
+  final ChannelType inputChannelType;
+  final ChannelType outputChannelType;
+  final Function(ChannelType, int)? channelClicked;
 
   const ChannelSend(
     this.name,
@@ -24,26 +25,34 @@ class ChannelSend extends StatelessWidget {
     this.snapshotData,
     this.valueChanged, {
     super.key,
-    this.inputChannelPrefix = "chan",
-    this.outputChannelPrefix = "aux",
+    this.inputChannelType = ChannelType.chan,
+    this.outputChannelType = ChannelType.aux,
     this.channelClicked,
   });
 
   @override
   Widget build(BuildContext context) {
-    String sendPath =
-        'mix/$inputChannelPrefix/$inputChannelNumber/matrix/$outputChannelPrefix/$outputChannelNumber/send';
-    String panPath =
-        'mix/$inputChannelPrefix/$inputChannelNumber/matrix/$outputChannelPrefix/$outputChannelNumber/pan';
+    double sendValue = snapshotData.getOutputSendValue(
+          inputChannelType,
+          inputChannelNumber,
+          outputChannelType,
+          outputChannelNumber,
+        ) ??
+        inputForMinusInfdB;
 
-    double sendValue = snapshotData[sendPath] ?? inputForMinusInfdB;
-    double panValue = snapshotData[panPath] ?? 0.0;
+    double panValue = snapshotData.getOutputPanValue(
+          inputChannelType,
+          inputChannelNumber,
+          outputChannelType,
+          outputChannelNumber,
+        ) ??
+        0.0;
 
     // For groups and reverbs we want to link to the relevant page
     Widget header = TextButton(
       onPressed: () {
         if (channelClicked != null) {
-          channelClicked!(inputChannelPrefix, inputChannelNumber);
+          channelClicked!(inputChannelType, inputChannelNumber);
         }
       },
       child: Text(
@@ -73,7 +82,13 @@ class ChannelSend extends StatelessWidget {
             // so for now set it to -12dB. We could store state of previous value
             // but that would mean a stateful widget.
             valueChanged(
-              sendPath,
+              snapshotData.getOutputPath(
+                inputChannelType,
+                inputChannelNumber,
+                outputChannelType,
+                outputChannelNumber,
+                ChannelValue.send,
+              ),
               sendValue > inputForMinusInfdB
                   ? inputForMinusInfdB
                   : inputForMinus12dB,
@@ -83,9 +98,16 @@ class ChannelSend extends StatelessWidget {
         Fader(
           sliderHeight: 440,
           value: sendValue,
+          type: outputChannelType,
           valueChanged: (value) => {
             valueChanged(
-              sendPath,
+              snapshotData.getOutputPath(
+                inputChannelType,
+                inputChannelNumber,
+                outputChannelType,
+                outputChannelNumber,
+                ChannelValue.send,
+              ),
               value,
             )
           },
@@ -97,7 +119,13 @@ class ChannelSend extends StatelessWidget {
           value: panValue,
           valueChanged: (value) => {
             valueChanged(
-              panPath,
+              snapshotData.getOutputPath(
+                inputChannelType,
+                inputChannelNumber,
+                outputChannelType,
+                outputChannelNumber,
+                ChannelValue.pan,
+              ),
               value,
             )
           },

@@ -56,28 +56,28 @@ import 'package:go_router/go_router.dart';
 Widget buildSendFaders(
   BuildContext context,
   int channel,
-  String sendType,
-  List<Map<String, dynamic>> inputChannels,
+  ChannelType sendType,
+  List<ChannelDefinition> inputChannels,
   MotuDatastoreApi datastoreApiInstance,
-  AsyncSnapshot<Map<String, dynamic>> snapshot,
+  AsyncSnapshot<Datastore> snapshot,
 ) {
   List<Widget> children;
   List<Widget> faders = [];
 
   // Iterate the auxChannels dictionary to dynamically
   // generate the fader row.
-  for (Map<String, dynamic> inputChannel in inputChannels) {
+  for (ChannelDefinition inputChannel in inputChannels) {
     faders.add(
       ChannelSend(
-        inputChannel["name"],
-        inputChannel["channel"],
+        inputChannel.name,
+        inputChannel.index,
         channel,
         snapshot.data!,
         datastoreApiInstance.setDouble,
-        inputChannelPrefix: inputChannel["type"],
-        outputChannelPrefix: sendType,
-        channelClicked: (String inputChannelType, int channelNumber) {
-          context.go('/$inputChannelType/$channelNumber');
+        inputChannelType: inputChannel.type,
+        outputChannelType: sendType,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${inputChannelType.name}/$channelNumber');
         },
       ),
     );
@@ -96,7 +96,7 @@ Widget buildSendFaders(
     snapshot.data!,
     datastoreApiInstance.toggleBoolean,
     datastoreApiInstance.setDouble,
-    prefix: sendType,
+    type: sendType,
   ));
 
   // Build the page: Logo, Row, Faders
@@ -120,11 +120,11 @@ Widget buildSendFaders(
 
 class SendScreen extends StatelessWidget {
   final int channel;
-  final String sendType;
-  final List<Map<String, dynamic>> activeSends;
-  final List<Map<String, dynamic>> inputChannels;
+  final ChannelType sendType;
+  final List<ChannelDefinition> activeSends;
+  final List<ChannelDefinition> inputChannels;
   final MotuDatastoreApi datastoreApiInstance;
-  final AsyncSnapshot<Map<String, dynamic>> snapshot;
+  final AsyncSnapshot<Datastore> snapshot;
   final IconData headerIcon;
 
   const SendScreen({
@@ -143,7 +143,7 @@ class SendScreen extends StatelessWidget {
     return MainScaffold(
       actions: [
         SendHeader(
-          label: sendType,
+          label: sendType.name,
           iconData: headerIcon,
           // Determine which mix is active.
           // Generally they are 2 channels for Left and Right, so always
@@ -151,7 +151,7 @@ class SendScreen extends StatelessWidget {
           selectedChannel: (channel % 2 > 0) ? channel - 1 : channel,
           channelChanged: (int? newValue) {
             if (newValue != null) {
-              context.go('/$sendType/$newValue');
+              context.go('/${sendType.name}/$newValue');
             }
           },
           sends: activeSends,

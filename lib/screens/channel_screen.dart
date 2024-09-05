@@ -6,46 +6,46 @@ import 'package:go_router/go_router.dart';
 
 Widget buildMixerFaders(
   BuildContext context,
-  Map<String, dynamic> inputChannel,
-  List<Map<String, dynamic>> groupChannels,
-  List<Map<String, dynamic>> auxChannels,
+  ChannelDefinition inputChannel,
+  List<ChannelDefinition> groupChannels,
+  List<ChannelDefinition> auxChannels,
   MotuDatastoreApi datastoreApiInstance,
-  AsyncSnapshot<Map<String, dynamic>> snapshot,
+  AsyncSnapshot<Datastore> snapshot,
 ) {
   List<Widget> children;
   List<Widget> faders = [
     Channel(
-      inputChannel["name"],
-      inputChannel["channel"],
+      inputChannel.name,
+      inputChannel.index,
       snapshot.data!,
       datastoreApiInstance.toggleBoolean,
       datastoreApiInstance.setDouble,
-      prefix: inputChannel["type"],
+      type: inputChannel.type,
     ),
     const SizedBox(width: 40),
     Channel(
       "Main",
-      inputChannel["channel"],
+      inputChannel.index,
       snapshot.data!,
       datastoreApiInstance.toggleBoolean,
       datastoreApiInstance.setDouble,
-      prefix: inputChannel["type"],
-      outputPrefix: "main",
+      type: inputChannel.type,
+      outputType: ChannelType.main,
       outputChannel: 0,
-      channelClicked: (String inputChannelType, int channelNumber) {
+      channelClicked: (ChannelType inputChannelType, int channelNumber) {
         context.go('/mixer/0');
       },
     ),
     Channel(
       "Reverb",
-      inputChannel["channel"],
+      inputChannel.index,
       snapshot.data!,
       datastoreApiInstance.toggleBoolean,
       datastoreApiInstance.setDouble,
-      prefix: inputChannel["type"],
-      outputPrefix: "reverb",
+      type: inputChannel.type,
+      outputType: ChannelType.reverb,
       outputChannel: 0,
-      channelClicked: (String inputChannelType, int channelNumber) {
+      channelClicked: (ChannelType inputChannelType, int channelNumber) {
         context.go('/reverb/0');
       },
     ),
@@ -55,16 +55,16 @@ Widget buildMixerFaders(
   faders.addAll(groupChannels.map(
     (a) {
       return Channel(
-        a["name"],
-        inputChannel["channel"],
+        a.name,
+        inputChannel.index,
         snapshot.data!,
         datastoreApiInstance.toggleBoolean,
         datastoreApiInstance.setDouble,
-        prefix: inputChannel["type"],
-        outputPrefix: "group",
-        outputChannel: a["channel"],
-        channelClicked: (String inputChannelType, int channelNumber) {
-          context.go('/group/${a["channel"]}');
+        type: inputChannel.type,
+        outputType: ChannelType.group,
+        outputChannel: a.index,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/group/${a.index}');
         },
       );
     },
@@ -75,16 +75,16 @@ Widget buildMixerFaders(
   faders.addAll(auxChannels.map(
     (a) {
       return Channel(
-        a["name"],
-        inputChannel["channel"],
+        a.name,
+        inputChannel.index,
         snapshot.data!,
         datastoreApiInstance.toggleBoolean,
         datastoreApiInstance.setDouble,
-        prefix: inputChannel["type"],
-        outputPrefix: "aux",
-        outputChannel: a["channel"],
-        channelClicked: (String inputChannelType, int channelNumber) {
-          context.go('/aux/${a["channel"]}');
+        type: inputChannel.type,
+        outputType: ChannelType.aux,
+        outputChannel: a.index,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/aux/${a.index}');
         },
       );
     },
@@ -110,11 +110,11 @@ Widget buildMixerFaders(
 }
 
 class ChannelScreen extends StatelessWidget {
-  final Map<String, dynamic> inputChannel;
+  final ChannelDefinition inputChannel;
   final MotuDatastoreApi datastoreApiInstance;
-  final List<Map<String, dynamic>> groups;
-  final List<Map<String, dynamic>> auxes;
-  final AsyncSnapshot<Map<String, dynamic>> snapshot;
+  final List<ChannelDefinition> groups;
+  final List<ChannelDefinition> auxes;
+  final AsyncSnapshot<Datastore> snapshot;
 
   const ChannelScreen({
     required this.inputChannel,

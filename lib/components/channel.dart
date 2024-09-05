@@ -2,19 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:motu_control/components/fader.dart';
 import 'package:motu_control/components/icon_toggle_button.dart';
 import 'package:motu_control/components/panner.dart';
+import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/utils/db_slider_utils.dart';
+import 'package:motu_control/api/motu.dart';
+import 'package:logger/logger.dart';
+
+final Logger logger = Logger(
+  printer: PrettyPrinter(
+      // or use SimplePrinter
+      methodCount: 2, // number of method calls to be displayed
+      errorMethodCount: 8, // number of method calls if stacktrace is provided
+      lineLength: 120, // width of the output
+      colors: true, // Colorful log messages
+      printEmojis: false, // Print an emoji for each log level
+      printTime: false // Should each log print contain a timestamp
+      ),
+);
 
 class Channel extends StatelessWidget {
   final String name;
   final int channelNumber;
-  final Map<String, dynamic> snapshotData;
-  final String prefix;
-  final String outputPrefix;
+  final Datastore snapshotData;
+  final ChannelType type;
+  final ChannelType outputType;
   final int outputChannel;
 
-  final Function(String, double) toggleBoolean;
+  final Function(String, bool) toggleBoolean;
   final Function(String, double) valueChanged;
-  final Function(String, int)? channelClicked;
+  final Function(ChannelType, int)? channelClicked;
 
   const Channel(
     this.name,
@@ -23,42 +38,68 @@ class Channel extends StatelessWidget {
     this.toggleBoolean,
     this.valueChanged, {
     super.key,
-    this.prefix = "chan",
-    this.outputPrefix = "input",
+    this.type = ChannelType.chan,
+    this.outputType = ChannelType.chan, // input
     this.outputChannel = 0,
     this.channelClicked,
   });
 
   @override
   Widget build(BuildContext context) {
-    String faderPath = "mix/$prefix/$channelNumber/matrix/";
-    faderPath += (outputPrefix == "input")
-        ? "fader"
-        : "$outputPrefix/$outputChannel/send";
+    bool soloValue = snapshotData.getChannelSoloValue(
+          type,
+          channelNumber,
+        ) ??
+        false;
+    bool muteValue = snapshotData.getChannelMuteValue(
+          type,
+          channelNumber,
+        ) ??
+        false;
 
-    String panPath = "mix/$prefix/$channelNumber/matrix/";
-    panPath += (["input", "main"].contains(outputPrefix))
-        ? "pan"
-        : "$outputPrefix/$outputChannel/pan";
+    double faderValue = ((outputType == ChannelType.chan)
+            ? snapshotData.getChannelFaderValue(
+                type,
+                channelNumber,
+              )
+            : snapshotData.getOutputSendValue(
+                type,
+                channelNumber,
+                outputType,
+                outputChannel,
+              )) ??
+        inputForMinusInfdB;
 
-    String soloPath = 'mix/$prefix/$channelNumber/matrix/solo';
-    String mutePath = 'mix/$prefix/$channelNumber/matrix/mute';
+    double panValue = ((outputType == ChannelType.chan)
+            ? snapshotData.getChannelPanValue(
+                type,
+                channelNumber,
+              )
+            : snapshotData.getOutputPanValue(
+                type,
+                channelNumber,
+                outputType,
+                outputChannel,
+              )) ??
+        0.0;
 
-    double soloValue = snapshotData[soloPath] ?? 0.0;
-    double muteValue = snapshotData[mutePath] ?? 0.0;
-    double faderValue = snapshotData[faderPath] ?? inputForMinusInfdB;
-    double panValue = snapshotData[panPath] ?? 0.0;
-    List<String> channelConfig =
-        snapshotData["mix/$prefix/$channelNumber/config/format"]?.split(":") ??
-            ["1", "0"];
+    List<int> channelConfig = snapshotData.getChannelFormat(
+      type,
+      channelNumber,
+    );
 
-    bool isStereo = (channelConfig[0] == "2" ||
-        ["reverb", "group", "main", "monitor"].contains(prefix));
+    bool isStereo = (channelConfig[0] == 2 ||
+        [
+          ChannelType.reverb,
+          ChannelType.group,
+          ChannelType.main,
+          ChannelType.monitor
+        ].contains(type));
 
     Widget header = TextButton(
       onPressed: () {
         if (channelClicked != null) {
-          channelClicked!(prefix, channelNumber);
+          channelClicked!(type, channelNumber);
         }
       },
       child: Text(
@@ -78,26 +119,34 @@ class Channel extends StatelessWidget {
         Row(children: [
           IconToggleButton(
             label: "",
-            icon: Icons.mic_off,
-            activeColor: const Color(0xFFFF0000),
-            inactiveColor: const Color.fromRGBO(147, 147, 147, 1),
-            active: muteValue == 1.0 ? true : false,
+            icon: kMuteIcon,
+            activeColor: kMuteActiveColor,
+            inactiveColor: kMuteInactiveColor,
+            active: muteValue,
             onPressed: () {
               toggleBoolean(
-                mutePath,
+                snapshotData.getChannelPath(
+                  type,
+                  channelNumber,
+                  ChannelValue.mute,
+                ),
                 muteValue,
               );
             },
           ),
           IconToggleButton(
             label: "",
-            icon: Icons.settings_voice,
-            activeColor: const Color.fromARGB(255, 150, 182, 10),
-            inactiveColor: const Color.fromRGBO(147, 147, 147, 1),
-            active: soloValue == 1.0 ? true : false,
+            icon: kSoloIcon,
+            activeColor: kSoloActiveColor,
+            inactiveColor: kSoloInactiveColor,
+            active: soloValue,
             onPressed: () {
               toggleBoolean(
-                soloPath,
+                snapshotData.getChannelPath(
+                  type,
+                  channelNumber,
+                  ChannelValue.solo,
+                ),
                 soloValue,
               );
             },
@@ -106,9 +155,22 @@ class Channel extends StatelessWidget {
         Fader(
           sliderHeight: 440,
           value: faderValue,
+          type: outputType,
           valueChanged: (value) => {
             valueChanged(
-              faderPath,
+              (outputType == ChannelType.chan)
+                  ? snapshotData.getChannelPath(
+                      type,
+                      channelNumber,
+                      ChannelValue.fader,
+                    )
+                  : snapshotData.getOutputPath(
+                      type,
+                      channelNumber,
+                      outputType,
+                      outputChannel,
+                      ChannelValue.send,
+                    ),
               value,
             )
           },
@@ -121,7 +183,19 @@ class Channel extends StatelessWidget {
                 value: panValue,
                 valueChanged: (value) => {
                   valueChanged(
-                    panPath,
+                    (outputType == ChannelType.chan)
+                        ? snapshotData.getChannelPath(
+                            type,
+                            channelNumber,
+                            ChannelValue.pan,
+                          )
+                        : snapshotData.getOutputPath(
+                            type,
+                            channelNumber,
+                            outputType,
+                            outputChannel,
+                            ChannelValue.pan,
+                          ),
                     value,
                   )
                 },
