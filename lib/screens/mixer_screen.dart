@@ -1,117 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/mixer_state.dart';
+import 'package:motu_control/api/datastore_api.dart';
 import 'package:motu_control/components/channel.dart';
 import 'package:motu_control/components/main_scaffold.dart';
 import 'package:go_router/go_router.dart';
-
-Widget buildMixerFaders(
-  BuildContext context,
-  List<ChannelDefinition> inputChannels,
-  List<ChannelDefinition> auxChannels,
-  MotuDatastoreApi datastoreApiInstance,
-  AsyncSnapshot<Datastore> snapshot,
-  ChannelType outputType,
-  int outputChannel,
-) {
-  List<Widget> children;
-  List<Widget> faders = [];
-
-  // Iterate the channels dictionary to dynamically
-  // generate the fader row.
-  for (ChannelDefinition inputChannel in inputChannels) {
-    faders.add(Channel(
-      inputChannel.name,
-      inputChannel.index,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: inputChannel.type,
-      outputType: outputType,
-      outputChannel: outputChannel,
-      channelClicked: (ChannelType inputChannelType, int channelNumber) {
-        context.go('/${inputChannelType.name}/$channelNumber');
-      },
-    ));
-  }
-
-  // mix/main/<index>/matrix/enable
-  // mix/main/<index>/matrix/mute
-  // mix/main/<index>/matrix/fader
-
-  // mix/monitor/<index>/matrix/enable
-  // mix/monitor/<index>/matrix/mute
-  // mix/monitor/<index>/matrix/fader
-
-  // Add the output fader for the Main & Mon mixes
-  faders.addAll([
-    const SizedBox(width: 20),
-    Channel(
-      "Main",
-      0,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: ChannelType.main,
-    ),
-    Channel(
-      "Monitor",
-      0,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: ChannelType.monitor,
-    ),
-    const SizedBox(width: 20),
-  ]);
-
-  faders.addAll(auxChannels.map(
-    (a) {
-      return Channel(
-        a.name,
-        a.index,
-        snapshot.data!,
-        datastoreApiInstance.toggleBoolean,
-        datastoreApiInstance.setDouble,
-        type: a.type,
-        channelClicked: (ChannelType inputChannelType, int channelNumber) {
-          context.go('/${inputChannelType.name}/$channelNumber');
-        },
-      );
-    },
-  ));
-
-  // Build the page: Logo, Row, Faders
-  children = [
-    Row(
-      mainAxisSize: MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: faders,
-    ),
-  ];
-
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: children,
-    ),
-  );
-}
+import 'package:motu_control/utils/constants.dart';
+import 'package:motu_control/api/channel_state.dart';
 
 class MixerScreen extends StatefulWidget {
-  final List<ChannelDefinition> inputChannels;
+  final MixerState state;
   final MotuDatastoreApi datastoreApiInstance;
-  final List<ChannelDefinition> groups;
-  final List<ChannelDefinition> auxes;
-  final AsyncSnapshot<Datastore> snapshot;
 
   const MixerScreen({
-    required this.inputChannels,
+    required this.state,
     required this.datastoreApiInstance,
-    required this.snapshot,
-    required this.groups,
-    required this.auxes,
     super.key,
   });
 
@@ -123,104 +25,276 @@ class _MixerScreenState extends State<MixerScreen> {
   ChannelType outputType = ChannelType.chan;
   int outputChannel = 0;
 
-  void onFaderChange(ChannelType type, int channel) {
-    setState(() {
-      outputType = type;
-      outputChannel = channel;
-    });
+  ///
+  /// Builds a UI containing all of the mixer faders, including
+  /// input channels, groups, reverb, main/mon and auxes.
+  ///
+  Widget buildMixerFaders(BuildContext context) {
+    List<Widget> faders = [];
+
+    // Iterate the input channels to dynamically generate the fader row
+    for (ChannelState inputChannel
+        in widget.state.allInputChannelStates.values) {
+      faders.add(Channel(
+        state: inputChannel,
+        toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+        valueChanged: widget.datastoreApiInstance.setDouble,
+        output: (outputType != ChannelType.chan)
+            ? widget.state.outputStates[outputType]![outputChannel]!
+            : null,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${inputChannelType.name}/$channelNumber');
+        },
+      ));
+    }
+
+    // Add Group Channels
+    for (int groupIndex in widget.state.allGroupsList) {
+      faders.add(Channel(
+        state: widget.state.outputStates[ChannelType.group]![groupIndex]!,
+        toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+        valueChanged: widget.datastoreApiInstance.setDouble,
+        output: (![ChannelType.chan, ChannelType.group].contains(outputType))
+            ? widget.state.outputStates[outputType]![outputChannel]!
+            : null,
+      ));
+    }
+
+    // Add Reverb Channel
+    faders.add(Channel(
+      state: widget.state.outputStates[ChannelType.reverb]![0]!,
+      toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+      valueChanged: widget.datastoreApiInstance.setDouble,
+      output: (![ChannelType.chan, ChannelType.reverb, ChannelType.group]
+              .contains(outputType))
+          ? widget.state.outputStates[outputType]![outputChannel]!
+          : null,
+    ));
+
+    // Add the output fader for the Main & Mon mixes
+    faders.addAll([
+      const SizedBox(width: 20),
+      Channel(
+        state: widget.state.outputStates[ChannelType.main]![0]!,
+        toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+        valueChanged: widget.datastoreApiInstance.setDouble,
+      ),
+      Channel(
+        state: widget.state.outputStates[ChannelType.monitor]![0]!,
+        toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+        valueChanged: widget.datastoreApiInstance.setDouble,
+      ),
+      const SizedBox(width: 20),
+    ]);
+
+    // // Add Aux Faders
+    faders.addAll(widget.state.outputStates[ChannelType.aux]!.values.map(
+      (aux) {
+        return Channel(
+          state: aux,
+          toggleBoolean: widget.datastoreApiInstance.toggleBoolean,
+          valueChanged: widget.datastoreApiInstance.setDouble,
+          channelClicked: (ChannelType inputChannelType, int channelNumber) {
+            context.go('/${inputChannelType.name}/$channelNumber');
+          },
+        );
+      },
+    ));
+
+    // Return a horizontal scroll view of all the faders.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: faders,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, dynamic>> outputChannels = [
-      {
-        "type": ChannelType.chan,
-        "name": "Inputs",
-        "channel": 0,
-        "icon": Icons.mic
-      },
-      {
-        "type": ChannelType.main,
-        "name": "Main",
-        "channel": 0,
-        "icon": Icons.speaker
-      },
-      {
-        "type": ChannelType.reverb,
-        "name": "Reverb",
-        "channel": 0,
-        "icon": Icons.double_arrow
-      },
-    ];
-
     return MainScaffold(
       actions: [
-        const Text("On Fader:"),
+        OnFaderSelection(
+          outputType: outputType,
+          outputChannel: outputChannel,
+          groups: widget.state.outputStates[ChannelType.group]!.values.toList(),
+          auxes: widget.state.outputStates[ChannelType.aux]!.values.toList(),
+          onSelectionChanged: (ChannelType type, int channel) {
+            // Set the output which is "on faders"
+            setState(() {
+              outputType = type;
+              outputChannel = channel;
+            });
+          },
+        )
+      ],
+      body: buildMixerFaders(context),
+    );
+  }
+}
+
+class OutputChannel {
+  final ChannelType type;
+  final Color color;
+  final String name;
+  final int channel;
+  final IconData icon;
+
+  OutputChannel({
+    required this.type,
+    required this.color,
+    required this.name,
+    required this.channel,
+    required this.icon,
+  });
+}
+
+class OnFaderSelection extends StatelessWidget {
+  final List<OutputChannel> outputChannels = [
+    OutputChannel(
+      type: ChannelType.chan,
+      color: kChannelColor,
+      name: "Inputs",
+      channel: 0,
+      icon: kInputIcon,
+    ),
+    OutputChannel(
+      type: ChannelType.main,
+      color: kMainColor,
+      name: "Main",
+      channel: 0,
+      icon: kMainIcon,
+    ),
+    OutputChannel(
+      type: ChannelType.reverb,
+      color: kReverbColor,
+      name: "Reverb",
+      channel: 0,
+      icon: kReverbIcon,
+    ),
+  ];
+
+  final ChannelType outputType;
+  final int outputChannel;
+  final List<ChannelState> groups;
+  final List<ChannelState> auxes;
+  final Function(ChannelType, int)? onSelectionChanged;
+
+  OnFaderSelection({
+    super.key,
+    required this.outputType,
+    required this.outputChannel,
+    this.groups = const [],
+    this.auxes = const [],
+    this.onSelectionChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          "On Fader:",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: kChannelTypeColors[outputType],
+          ),
+        ),
         Row(
           children: outputChannels.map((output) {
             return IconButton(
-              onPressed: () => onFaderChange(output["type"], output["channel"]),
-              icon: Icon(output["icon"] as IconData),
-              selectedIcon: Icon(
-                output["icon"] as IconData,
-                color: Colors.purple,
+              onPressed: () => onSelectionChanged!(
+                output.type,
+                output.channel,
               ),
-              hoverColor: Colors.purple.withAlpha(150),
-              highlightColor: Colors.purple,
-              isSelected: (outputType == output["type"] &&
-                  outputChannel == output["channel"]),
+              icon: Icon(output.icon),
+              selectedIcon: Icon(
+                output.icon,
+                color: output.color,
+              ),
+              hoverColor: output.color.withAlpha(150),
+              highlightColor: output.color,
+              isSelected: (outputType == output.type &&
+                  outputChannel == output.channel),
             );
           }).toList(),
         ),
-        DropdownMenu<int>(
-          hintText: "Select a Group.",
+        SendDropdown(
+          type: ChannelType.group,
+          sends: groups,
+          selectedType: outputType,
           label: const Text("Group"),
-          leadingIcon: Icon(
-            Icons.group,
-            color: (outputType == ChannelType.group)
-                ? Colors.purple
-                : Colors.white,
-          ),
-          dropdownMenuEntries: widget.groups.map(
-            (ChannelDefinition group) {
-              return DropdownMenuEntry<int>(
-                value: group.index,
-                label: group.name,
-              );
-            },
-          ).toList(),
-          onSelected: (int? value) =>
-              onFaderChange(ChannelType.group, value ?? 0),
+          hintText: "Select a Group.",
+          activeColor: kGroupColor,
+          icon: kGroupIcon,
+          onSelectionChanged: onSelectionChanged,
         ),
-        DropdownMenu<int>(
-          hintText: "Select an Aux.",
+        SendDropdown(
+          type: ChannelType.aux,
+          sends: auxes,
+          selectedType: outputType,
           label: const Text("Aux"),
-          leadingIcon: Icon(
-            Icons.headphones,
-            color:
-                (outputType == ChannelType.aux) ? Colors.purple : Colors.white,
-          ),
-          dropdownMenuEntries: widget.auxes.map(
-            (ChannelDefinition aux) {
-              return DropdownMenuEntry<int>(
-                value: aux.index,
-                label: aux.name,
-              );
-            },
-          ).toList(),
-          onSelected: (int? value) =>
-              onFaderChange(ChannelType.aux, value ?? 0),
+          hintText: "Select an Aux.",
+          activeColor: kAuxColor,
+          icon: kAuxIcon,
+          onSelectionChanged: onSelectionChanged,
         ),
       ],
-      body: buildMixerFaders(
-        context,
-        widget.inputChannels,
-        widget.auxes,
-        widget.datastoreApiInstance,
-        widget.snapshot,
-        outputType,
-        outputChannel,
+    );
+  }
+}
+
+class SendDropdown extends StatelessWidget {
+  const SendDropdown({
+    super.key,
+    required this.type,
+    required this.sends,
+    required this.selectedType,
+    this.icon = kGroupIcon,
+    this.label = const Text("Send"),
+    this.hintText = "Select a Send",
+    required this.onSelectionChanged,
+    this.activeColor = kGroupColor,
+    this.inactiveColor = Colors.white,
+  });
+
+  final ChannelType type;
+  final Widget label;
+  final String hintText;
+  final ChannelType selectedType;
+  final Color activeColor;
+  final Color inactiveColor;
+  final List<ChannelState> sends;
+  final IconData icon;
+  final Function(ChannelType p1, int p2)? onSelectionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownMenu<int>(
+      hintText: hintText,
+      label: label,
+      leadingIcon: Icon(
+        icon,
+        color: (selectedType == type) ? activeColor : inactiveColor,
       ),
+      dropdownMenuEntries: sends.map(
+        (ChannelState send) {
+          return DropdownMenuEntry<int>(
+            value: send.index,
+            label: send.name,
+          );
+        },
+      ).toList(),
+      onSelected: (int? value) => onSelectionChanged!(type, value ?? 0),
     );
   }
 }

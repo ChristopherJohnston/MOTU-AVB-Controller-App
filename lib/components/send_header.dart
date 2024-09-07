@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/channel_state.dart';
 
 class SendHeader extends StatelessWidget {
   final int selectedChannel;
   final Function(int?)? channelChanged;
-  final List<ChannelDefinition> sends;
+  final List<ChannelState> sends;
   final String label;
   final IconData iconData;
 

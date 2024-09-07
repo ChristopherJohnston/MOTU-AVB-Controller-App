@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:motu_control/api/motu.dart';
 import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/utils/db_slider_utils.dart';
 import 'package:motu_control/components/fader_components/fader_thumb_shape.dart';
 import 'fader_components/fader_track_shape.dart';
-import 'package:logger/logger.dart';
 
 class CustomRoundSliderTickMarkShape extends SliderTickMarkShape {
   final double tickMarkRadius;
 
-  const CustomRoundSliderTickMarkShape({this.tickMarkRadius = 2.0});
+  const CustomRoundSliderTickMarkShape({
+    this.tickMarkRadius = 3.0,
+  });
 
   @override
   Size getPreferredSize({
@@ -51,33 +51,21 @@ class CustomRoundSliderTickMarkShape extends SliderTickMarkShape {
   }
 }
 
-final Logger logger = Logger(
-  printer: PrettyPrinter(
-      // or use SimplePrinter
-      methodCount: 2, // number of method calls to be displayed
-      errorMethodCount: 8, // number of method calls if stacktrace is provided
-      lineLength: 120, // width of the output
-      colors: true, // Colorful log messages
-      printEmojis: false, // Print an emoji for each log level
-      printTime: false // Should each log print contain a timestamp
-      ),
-);
-
 class Fader extends StatelessWidget {
-  final double sliderHeight;
+  late final FaderStyle style;
   final double min = 0.0;
   final double max = 1.0;
   final double value; // 0-4
   final Function(double)? valueChanged;
-  final ChannelType type;
 
-  const Fader({
-    this.sliderHeight = 48,
+  Fader({
     this.value = 1.0,
-    this.type = ChannelType.chan,
     this.valueChanged,
+    FaderStyle? style,
     super.key,
-  });
+  }) {
+    this.style = style ?? kDefaultFaderStyle;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,24 +81,25 @@ class Fader extends StatelessWidget {
       },
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
-          activeTrackColor: kFaderColors[type],
-          inactiveTrackColor: kFaderInactiveTrackColor,
-          trackHeight: 5,
+          activeTrackColor: style.activeTrackColor,
+          inactiveTrackColor: style.inactiveTrackColor,
+          trackHeight: style.trackHeight,
           trackShape: const FaderTrackShape(),
-          thumbShape: const FaderThumbShape(
-            thumbRadius: 15,
+          thumbShape: FaderThumbShape(
+            style: style.thumbStyle,
           ),
-          overlayColor: kFaderOverlayColor,
-          tickMarkShape:
-              const CustomRoundSliderTickMarkShape(tickMarkRadius: 3.0),
-          activeTickMarkColor: kActiveFaderTickMarkColor,
-          inactiveTickMarkColor: kInactiveFaderTickMarkColor,
+          overlayColor: style.overlayColor,
+          tickMarkShape: CustomRoundSliderTickMarkShape(
+            tickMarkRadius: style.tickMarkRadius,
+          ),
+          activeTickMarkColor: style.activeTickMarkColor,
+          inactiveTickMarkColor: style.inactiveTickMarkColor,
         ),
         child: Slider(
           value: sliderPosition,
           min: min,
           max: max,
-          divisions: 100,
+          divisions: style.divisions,
           onChanged: (newValue) {
             if (valueChanged != null) {
               double newInputValue = sliderToInput(newValue);
@@ -122,11 +111,11 @@ class Fader extends StatelessWidget {
     );
 
     return SizedBox(
-      width: 100,
+      width: style.width,
       child: Column(
         children: [
           SizedBox(
-            height: sliderHeight,
+            height: style.sliderHeight,
             child: RotatedBox(
               quarterTurns: 3,
               child: slider,
@@ -140,11 +129,7 @@ class Fader extends StatelessWidget {
           // Slider Value
           Text(
             inputToDbStr(value),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+            style: style.valueTextStyle,
           )
         ],
       ),

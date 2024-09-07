@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/mixer_state.dart';
+import 'package:motu_control/api/datastore_api.dart';
+import 'package:motu_control/api/channel_state.dart';
 import 'package:motu_control/components/channel_send.dart';
 import 'package:motu_control/components/channel.dart';
 import 'package:motu_control/components/main_scaffold.dart';
 import 'package:motu_control/components/send_header.dart';
 import 'package:go_router/go_router.dart';
+import 'package:motu_control/utils/constants.dart';
 
 // // Channel
 // // /chan/0/matrix/solo
@@ -53,90 +56,119 @@ import 'package:go_router/go_router.dart';
 //   {"channel": 0, "type": "reverb"},
 // ];
 
-Widget buildSendFaders(
-  BuildContext context,
-  int channel,
-  ChannelType sendType,
-  List<ChannelDefinition> inputChannels,
-  MotuDatastoreApi datastoreApiInstance,
-  AsyncSnapshot<Datastore> snapshot,
-) {
-  List<Widget> children;
-  List<Widget> faders = [];
-
-  // Iterate the auxChannels dictionary to dynamically
-  // generate the fader row.
-  for (ChannelDefinition inputChannel in inputChannels) {
-    faders.add(
-      ChannelSend(
-        inputChannel.name,
-        inputChannel.index,
-        channel,
-        snapshot.data!,
-        datastoreApiInstance.setDouble,
-        inputChannelType: inputChannel.type,
-        outputChannelType: sendType,
-        channelClicked: (ChannelType inputChannelType, int channelNumber) {
-          context.go('/${inputChannelType.name}/$channelNumber');
-        },
-      ),
-    );
-  }
-  faders.add(
-    const SizedBox(width: 20),
-  );
-
-  // Add the output fader for the send mix
-  // e,g,
-  // mix/aux/<index>/matrix/mute
-  //mix/aux/<index>/matrix/fader
-  faders.add(Channel(
-    "Output",
-    channel,
-    snapshot.data!,
-    datastoreApiInstance.toggleBoolean,
-    datastoreApiInstance.setDouble,
-    type: sendType,
-  ));
-
-  // Build the page: Logo, Row, Faders
-  children = [
-    Row(
-      mainAxisSize: MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: faders,
-    ),
-  ];
-
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: children,
-    ),
-  );
-}
-
 class SendScreen extends StatelessWidget {
   final int channel;
   final ChannelType sendType;
-  final List<ChannelDefinition> activeSends;
-  final List<ChannelDefinition> inputChannels;
+  final MixerState state;
   final MotuDatastoreApi datastoreApiInstance;
-  final AsyncSnapshot<Datastore> snapshot;
   final IconData headerIcon;
 
   const SendScreen({
-    required this.channel,
     required this.sendType,
-    this.headerIcon = Icons.headphones,
-    required this.activeSends,
-    required this.inputChannels,
+    required this.channel,
+    required this.state,
+    this.headerIcon = kAuxIcon,
     required this.datastoreApiInstance,
-    required this.snapshot,
     super.key,
   });
+
+  Widget buildSendFaders(BuildContext context) {
+    List<Widget> children;
+    List<Widget> faders = [];
+
+    // Add Channels
+    for (int inputIndex
+        in state.sendInputList[sendType]![ChannelType.chan]![channel]!) {
+      faders.add(
+        ChannelSend(
+          state: state.allInputChannelStates[inputIndex]!,
+          valueChanged: datastoreApiInstance.setDouble,
+          output: state.outputStates[sendType]![channel]!,
+          channelClicked: (ChannelType inputChannelType, int channelNumber) {
+            context.go('/${inputChannelType.name}/$channelNumber');
+          },
+        ),
+      );
+    }
+
+    // Add Groups
+    for (int inputIndex
+        in state.sendInputList[sendType]![ChannelType.group]![channel]!) {
+      faders.add(
+        ChannelSend(
+          state: state.outputStates[ChannelType.group]![inputIndex]!,
+          valueChanged: datastoreApiInstance.setDouble,
+          output: state.outputStates[sendType]![channel]!,
+          channelClicked: (ChannelType inputChannelType, int channelNumber) {
+            context.go('/${inputChannelType.name}/$channelNumber');
+          },
+        ),
+      );
+    }
+
+    // Add Reverb
+    if (sendType == ChannelType.aux) {
+      faders.add(
+        ChannelSend(
+          state: state.outputStates[ChannelType.reverb]![0]!,
+          valueChanged: datastoreApiInstance.setDouble,
+          output: state.outputStates[sendType]![channel]!,
+          channelClicked: (ChannelType inputChannelType, int channelNumber) {
+            context.go('/${inputChannelType.name}/$channelNumber');
+          },
+        ),
+      );
+    }
+
+    // Iterate the auxChannels dictionary to dynamically
+    // generate the fader row.
+    // for (ChannelType outputType in [ChannelType.chan, ChannelType.group]) {
+    //   for (ChannelState inputChannel
+    //       in state.sendInputChannelStates[sendType]![outputType]![channel]!) {
+    //     faders.add(
+    //       ChannelSend(
+    //         state: inputChannel,
+    //         valueChanged: datastoreApiInstance.setDouble,
+    //         output: state.outputStates[sendType]![channel]!,
+    //         channelClicked: (ChannelType inputChannelType, int channelNumber) {
+    //           context.go('/${inputChannelType.name}/$channelNumber');
+    //         },
+    //       ),
+    //     );
+    //   }
+    // }
+    faders.add(
+      const SizedBox(width: 20),
+    );
+
+    // Add the output fader for the send mix
+    // e,g,
+    // mix/aux/<index>/matrix/mute
+    //mix/aux/<index>/matrix/fader
+    faders.add(Channel(
+      state: state.outputStates[sendType]![channel]!,
+      toggleBoolean: datastoreApiInstance.toggleBoolean,
+      valueChanged: datastoreApiInstance.setDouble,
+    ));
+
+    // Build the page: Logo, Row, Faders
+    children = [
+      Row(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: faders,
+      ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: children,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,17 +186,10 @@ class SendScreen extends StatelessWidget {
               context.go('/${sendType.name}/$newValue');
             }
           },
-          sends: activeSends,
+          sends: state.outputStates[sendType]!.values.toList(),
         )
       ],
-      body: buildSendFaders(
-        context,
-        channel,
-        sendType,
-        inputChannels,
-        datastoreApiInstance,
-        snapshot,
-      ),
+      body: buildSendFaders(context),
     );
   }
 }

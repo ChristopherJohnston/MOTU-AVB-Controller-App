@@ -1,6 +1,8 @@
 import 'package:flutter_svg/svg.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:motu_control/utils/constants.dart';
+import 'package:motu_control/utils/screen.dart';
 
 class MainScaffold extends StatelessWidget {
   final List<Widget> actions;
@@ -22,7 +24,7 @@ class MainScaffold extends StatelessWidget {
         title: title ??
             TextButton(
               onPressed: () {
-                context.go('/mixer/0');
+                context.go('/${Screen.mixer.name}/0');
               },
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 20, 0),
@@ -63,35 +65,35 @@ class MainScaffold extends StatelessWidget {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.settings_input_component),
+              leading: const Icon(kMixerIcon),
               title: const Text('Mixer'),
               onTap: () {
                 Navigator.pop(context);
-                context.go('/mixer/0');
+                context.go('/${Screen.mixer.name}/0');
               },
             ),
             ListTile(
-              leading: const Icon(Icons.headphones),
+              leading: const Icon(kAuxIcon),
               title: const Text('Aux'),
               onTap: () {
                 Navigator.pop(context);
-                context.go('/aux/0');
+                context.go('/${Screen.aux.name}/0');
               },
             ),
             ListTile(
-              leading: const Icon(Icons.group),
+              leading: const Icon(kGroupIcon),
               title: const Text('Group'),
               onTap: () {
                 Navigator.pop(context);
-                context.go('/group/0');
+                context.go('/${Screen.group.name}/0');
               },
             ),
             ListTile(
-              leading: const Icon(Icons.double_arrow),
+              leading: const Icon(kReverbIcon),
               title: const Text('Reverb'),
               onTap: () {
                 Navigator.pop(context);
-                context.go('/reverb/0');
+                context.go('/${Screen.reverb.name}/0');
               },
             ),
             const Divider(),

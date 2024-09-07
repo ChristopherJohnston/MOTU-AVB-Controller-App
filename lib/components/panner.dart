@@ -1,28 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/components/fader_components/fader_thumb_shape.dart';
 import 'fader_components/fader_track_shape.dart';
 
 class Panner extends StatelessWidget {
-  final double sliderWidth;
+  late final PannerStyle style;
   final double min;
   final double max;
   final double value;
   final Function(double)? valueChanged;
 
-  const Panner({
-    this.sliderWidth = 36,
+  Panner({
     this.max = 1.0,
     this.min = -1.0,
     this.value = 0,
     this.valueChanged,
+    PannerStyle? style,
     super.key,
-  });
+  }) {
+    this.style = style ?? kDefaultPannerStyle;
+  }
 
   @override
   Widget build(BuildContext context) {
     Widget slider = Slider(
       value: value,
-      divisions: 24,
+      divisions: style.divisions,
       min: min,
       max: max,
       onChanged: (value) {
@@ -35,7 +38,7 @@ class Panner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8.0),
       child: SizedBox(
-        width: 100,
+        width: style.width,
         child: Column(
           children: [
             Stack(
@@ -46,15 +49,15 @@ class Panner extends StatelessWidget {
                     Expanded(
                       child: LinearProgressIndicator(
                         value: 1 - value / min,
-                        color: const Color(0XFF111111),
-                        backgroundColor: const Color(0xFFFF0000),
+                        color: style.inactiveTrackColor,
+                        backgroundColor: style.activeTrackColor,
                       ),
                     ),
                     Expanded(
                       child: LinearProgressIndicator(
                         value: value / max,
-                        backgroundColor: const Color(0XFF111111),
-                        color: const Color(0xFFFF0000),
+                        backgroundColor: style.inactiveTrackColor,
+                        color: style.activeTrackColor,
                       ),
                     )
                   ],
@@ -70,12 +73,10 @@ class Panner extends StatelessWidget {
                     data: SliderTheme.of(context).copyWith(
                         activeTrackColor: Colors.transparent,
                         inactiveTrackColor: Colors.transparent,
-                        trackHeight: 5,
+                        trackHeight: style.trackHeight,
                         trackShape: const FaderTrackShape(),
-                        thumbShape: const FaderThumbShape(
-                          thumbRadius: 8,
-                        ),
-                        overlayColor: Colors.white.withOpacity(.1),
+                        thumbShape: FaderThumbShape(style: style.thumbStyle),
+                        overlayColor: style.overlayColor,
                         tickMarkShape: SliderTickMarkShape.noTickMark),
                     child: slider,
                   ),

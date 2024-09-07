@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:motu_control/components/main_scaffold.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/datastore.dart';
 
 class ErrorScreen extends StatelessWidget {
   final AsyncSnapshot<Datastore> snapshot;

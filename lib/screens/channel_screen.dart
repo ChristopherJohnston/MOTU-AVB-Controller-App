@@ -1,140 +1,123 @@
 import 'package:flutter/material.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/datastore_api.dart';
+import 'package:motu_control/api/mixer_state.dart';
 import 'package:motu_control/components/channel.dart';
 import 'package:motu_control/components/main_scaffold.dart';
 import 'package:go_router/go_router.dart';
-
-Widget buildMixerFaders(
-  BuildContext context,
-  ChannelDefinition inputChannel,
-  List<ChannelDefinition> groupChannels,
-  List<ChannelDefinition> auxChannels,
-  MotuDatastoreApi datastoreApiInstance,
-  AsyncSnapshot<Datastore> snapshot,
-) {
-  List<Widget> children;
-  List<Widget> faders = [
-    Channel(
-      inputChannel.name,
-      inputChannel.index,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: inputChannel.type,
-    ),
-    const SizedBox(width: 40),
-    Channel(
-      "Main",
-      inputChannel.index,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: inputChannel.type,
-      outputType: ChannelType.main,
-      outputChannel: 0,
-      channelClicked: (ChannelType inputChannelType, int channelNumber) {
-        context.go('/mixer/0');
-      },
-    ),
-    Channel(
-      "Reverb",
-      inputChannel.index,
-      snapshot.data!,
-      datastoreApiInstance.toggleBoolean,
-      datastoreApiInstance.setDouble,
-      type: inputChannel.type,
-      outputType: ChannelType.reverb,
-      outputChannel: 0,
-      channelClicked: (ChannelType inputChannelType, int channelNumber) {
-        context.go('/reverb/0');
-      },
-    ),
-    const SizedBox(width: 20),
-  ];
-
-  faders.addAll(groupChannels.map(
-    (a) {
-      return Channel(
-        a.name,
-        inputChannel.index,
-        snapshot.data!,
-        datastoreApiInstance.toggleBoolean,
-        datastoreApiInstance.setDouble,
-        type: inputChannel.type,
-        outputType: ChannelType.group,
-        outputChannel: a.index,
-        channelClicked: (ChannelType inputChannelType, int channelNumber) {
-          context.go('/group/${a.index}');
-        },
-      );
-    },
-  ));
-
-  faders.add(const SizedBox(width: 20));
-
-  faders.addAll(auxChannels.map(
-    (a) {
-      return Channel(
-        a.name,
-        inputChannel.index,
-        snapshot.data!,
-        datastoreApiInstance.toggleBoolean,
-        datastoreApiInstance.setDouble,
-        type: inputChannel.type,
-        outputType: ChannelType.aux,
-        outputChannel: a.index,
-        channelClicked: (ChannelType inputChannelType, int channelNumber) {
-          context.go('/aux/${a.index}');
-        },
-      );
-    },
-  ));
-
-  // Build the page: Logo, Row, Faders
-  children = [
-    Row(
-      mainAxisSize: MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: faders,
-    ),
-  ];
-
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: children,
-    ),
-  );
-}
+import 'package:motu_control/utils/screen.dart';
+import 'package:motu_control/api/channel_state.dart';
 
 class ChannelScreen extends StatelessWidget {
-  final ChannelDefinition inputChannel;
+  final int index;
+  final MixerState state;
   final MotuDatastoreApi datastoreApiInstance;
-  final List<ChannelDefinition> groups;
-  final List<ChannelDefinition> auxes;
-  final AsyncSnapshot<Datastore> snapshot;
 
   const ChannelScreen({
-    required this.inputChannel,
+    required this.index,
+    required this.state,
     required this.datastoreApiInstance,
-    required this.snapshot,
-    required this.groups,
-    required this.auxes,
     super.key,
   });
+
+  Widget buildMixerFaders(
+    BuildContext context,
+    MixerState state,
+    MotuDatastoreApi datastoreApiInstance,
+  ) {
+    List<Widget> faders = [
+      // The selected input channel
+      Channel(
+        state: state.allInputChannelStates[index]!,
+        toggleBoolean: datastoreApiInstance.toggleBoolean,
+        valueChanged: datastoreApiInstance.setDouble,
+      ),
+
+      const SizedBox(width: 40),
+
+      // Main Output For this channel
+      Channel(
+        state: state.allInputChannelStates[index]!,
+        toggleBoolean: datastoreApiInstance.toggleBoolean,
+        valueChanged: datastoreApiInstance.setDouble,
+        output: state.outputStates[ChannelType.main]![0],
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${Screen.mixer.name}/0');
+        },
+        isOutput: true,
+      ),
+
+      const SizedBox(width: 20),
+
+      // Reverb output for this channel
+      Channel(
+        state: state.allInputChannelStates[index]!,
+        toggleBoolean: datastoreApiInstance.toggleBoolean,
+        valueChanged: datastoreApiInstance.setDouble,
+        output: state.outputStates[ChannelType.reverb]![0],
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${Screen.reverb.name}/0');
+        },
+        isOutput: true,
+      ),
+
+      const SizedBox(width: 20),
+    ];
+
+    // Group outputs for this channel
+    faders
+        .addAll(state.outputStates[ChannelType.group]!.values.map((groupState) {
+      return Channel(
+        state: state.allInputChannelStates[index]!,
+        toggleBoolean: datastoreApiInstance.toggleBoolean,
+        valueChanged: datastoreApiInstance.setDouble,
+        output: groupState,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${Screen.group.name}/${groupState.index}');
+        },
+        isOutput: true,
+      );
+    }));
+
+    faders.add(const SizedBox(width: 20));
+
+    // Aux outputs for this channel
+    faders.addAll(state.outputStates[ChannelType.aux]!.values.map((auxState) {
+      return Channel(
+        state: state.allInputChannelStates[index]!,
+        toggleBoolean: datastoreApiInstance.toggleBoolean,
+        valueChanged: datastoreApiInstance.setDouble,
+        output: auxState,
+        channelClicked: (ChannelType inputChannelType, int channelNumber) {
+          context.go('/${Screen.aux.name}/${auxState.index}');
+        },
+        isOutput: true,
+      );
+    }));
+
+    // Return a horizontal scroll view of all the faders.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: faders,
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
       body: buildMixerFaders(
         context,
-        inputChannel,
-        groups,
-        auxes,
+        state,
         datastoreApiInstance,
-        snapshot,
       ),
     );
   }

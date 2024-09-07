@@ -3,107 +3,48 @@ import 'package:motu_control/components/fader.dart';
 import 'package:motu_control/components/icon_toggle_button.dart';
 import 'package:motu_control/components/panner.dart';
 import 'package:motu_control/utils/constants.dart';
-import 'package:motu_control/utils/db_slider_utils.dart';
-import 'package:motu_control/api/motu.dart';
-import 'package:logger/logger.dart';
-
-final Logger logger = Logger(
-  printer: PrettyPrinter(
-      // or use SimplePrinter
-      methodCount: 2, // number of method calls to be displayed
-      errorMethodCount: 8, // number of method calls if stacktrace is provided
-      lineLength: 120, // width of the output
-      colors: true, // Colorful log messages
-      printEmojis: false, // Print an emoji for each log level
-      printTime: false // Should each log print contain a timestamp
-      ),
-);
+import 'package:motu_control/api/datastore.dart';
+import 'package:motu_control/api/channel_state.dart';
 
 class Channel extends StatelessWidget {
-  final String name;
-  final int channelNumber;
-  final Datastore snapshotData;
-  final ChannelType type;
-  final ChannelType outputType;
-  final int outputChannel;
+  final ChannelState state;
+  final ChannelState? output;
+  final bool isOutput;
 
-  final Function(String, bool) toggleBoolean;
-  final Function(String, double) valueChanged;
+  final Function(ChannelType, int, ValueType, bool) toggleBoolean;
+  final Function(
+    ChannelType,
+    int,
+    ValueType,
+    ChannelType?,
+    int?,
+    double,
+  ) valueChanged;
   final Function(ChannelType, int)? channelClicked;
 
-  const Channel(
-    this.name,
-    this.channelNumber,
-    this.snapshotData,
-    this.toggleBoolean,
-    this.valueChanged, {
+  const Channel({
+    required this.state,
+    required this.toggleBoolean,
+    required this.valueChanged,
     super.key,
-    this.type = ChannelType.chan,
-    this.outputType = ChannelType.chan, // input
-    this.outputChannel = 0,
+    this.output,
     this.channelClicked,
+    this.isOutput = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    bool soloValue = snapshotData.getChannelSoloValue(
-          type,
-          channelNumber,
-        ) ??
-        false;
-    bool muteValue = snapshotData.getChannelMuteValue(
-          type,
-          channelNumber,
-        ) ??
-        false;
-
-    double faderValue = ((outputType == ChannelType.chan)
-            ? snapshotData.getChannelFaderValue(
-                type,
-                channelNumber,
-              )
-            : snapshotData.getOutputSendValue(
-                type,
-                channelNumber,
-                outputType,
-                outputChannel,
-              )) ??
-        inputForMinusInfdB;
-
-    double panValue = ((outputType == ChannelType.chan)
-            ? snapshotData.getChannelPanValue(
-                type,
-                channelNumber,
-              )
-            : snapshotData.getOutputPanValue(
-                type,
-                channelNumber,
-                outputType,
-                outputChannel,
-              )) ??
-        0.0;
-
-    List<int> channelConfig = snapshotData.getChannelFormat(
-      type,
-      channelNumber,
-    );
-
-    bool isStereo = (channelConfig[0] == 2 ||
-        [
-          ChannelType.reverb,
-          ChannelType.group,
-          ChannelType.main,
-          ChannelType.monitor
-        ].contains(type));
+    bool soloValue = state.channelValues.solo;
+    bool muteValue = state.channelValues.mute;
 
     Widget header = TextButton(
       onPressed: () {
         if (channelClicked != null) {
-          channelClicked!(type, channelNumber);
+          channelClicked!(state.type, state.index);
         }
       },
       child: Text(
-        name,
+        (isOutput) ? output?.name ?? state.name : state.name,
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
@@ -125,11 +66,9 @@ class Channel extends StatelessWidget {
             active: muteValue,
             onPressed: () {
               toggleBoolean(
-                snapshotData.getChannelPath(
-                  type,
-                  channelNumber,
-                  ChannelValue.mute,
-                ),
+                state.type,
+                state.index,
+                ValueType.mute,
                 muteValue,
               );
             },
@@ -142,60 +81,48 @@ class Channel extends StatelessWidget {
             active: soloValue,
             onPressed: () {
               toggleBoolean(
-                snapshotData.getChannelPath(
-                  type,
-                  channelNumber,
-                  ChannelValue.solo,
-                ),
+                state.type,
+                state.index,
+                ValueType.solo,
                 soloValue,
               );
             },
           ),
         ]),
         Fader(
-          sliderHeight: 440,
-          value: faderValue,
-          type: outputType,
+          value: (output != null)
+              ? state.outputValues[output!.type]![output!.index]!.send
+              : state.channelValues.fader,
+          style: kFaderStyles[output?.type ?? ChannelType.chan],
           valueChanged: (value) => {
             valueChanged(
-              (outputType == ChannelType.chan)
-                  ? snapshotData.getChannelPath(
-                      type,
-                      channelNumber,
-                      ChannelValue.fader,
-                    )
-                  : snapshotData.getOutputPath(
-                      type,
-                      channelNumber,
-                      outputType,
-                      outputChannel,
-                      ChannelValue.send,
-                    ),
+              state.type,
+              state.index,
+              (output != null) ? ValueType.send : ValueType.fader,
+              output?.type,
+              output?.index,
               value,
             )
           },
         ),
         const SizedBox(height: 20),
-        !isStereo
+        (!state.isStereo && output?.type != ChannelType.main)
             ? Panner(
+                style: PannerStyle.fromColor(
+                    kFaderStyles[output?.type ?? ChannelType.chan]!
+                        .activeTrackColor),
                 min: -1.0,
                 max: 1.0,
-                value: panValue,
+                value: (output != null)
+                    ? state.outputValues[output!.type]![output!.index]!.pan
+                    : state.channelValues.pan,
                 valueChanged: (value) => {
                   valueChanged(
-                    (outputType == ChannelType.chan)
-                        ? snapshotData.getChannelPath(
-                            type,
-                            channelNumber,
-                            ChannelValue.pan,
-                          )
-                        : snapshotData.getOutputPath(
-                            type,
-                            channelNumber,
-                            outputType,
-                            outputChannel,
-                            ChannelValue.pan,
-                          ),
+                    state.type,
+                    state.index,
+                    ValueType.pan,
+                    output?.type,
+                    output?.index,
                     value,
                   )
                 },

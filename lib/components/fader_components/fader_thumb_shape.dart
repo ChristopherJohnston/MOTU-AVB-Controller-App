@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:motu_control/utils/constants.dart';
 
 class FaderThumbShape extends SliderComponentShape {
-  final double thumbRadius;
+  late final FaderThumbStyle style;
 
-  const FaderThumbShape({
-    required this.thumbRadius,
-  });
+  FaderThumbShape({
+    FaderThumbStyle? style,
+  }) {
+    this.style = style ?? kDefaultFaderThumbStyle;
+  }
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) {
-    return Size.fromRadius(thumbRadius);
+    return Size.fromRadius(style.thumbRadius);
   }
 
   @override
@@ -30,16 +33,12 @@ class FaderThumbShape extends SliderComponentShape {
     final Canvas canvas = context.canvas;
 
     final paint = Paint()
-      ..color = Colors.white //Thumb Background Color
+      ..color = style.color //Thumb Background Color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+      ..strokeWidth = style.strokeWidth;
 
     TextSpan span = TextSpan(
-      style: TextStyle(
-        fontSize: thumbRadius * .7,
-        fontWeight: FontWeight.w700,
-        color: Colors.black, //Text Color of Value on Thumb
-      ),
+      style: style.thumbTextStyle,
       text: "",
     );
 
@@ -51,7 +50,7 @@ class FaderThumbShape extends SliderComponentShape {
     Offset textCenter =
         Offset(center.dx - (tp.width / 2), center.dy - (tp.height / 2));
 
-    canvas.drawCircle(center, thumbRadius * .9, paint);
+    canvas.drawCircle(center, style.thumbRadius * .9, paint);
     tp.paint(canvas, textCenter);
   }
 }

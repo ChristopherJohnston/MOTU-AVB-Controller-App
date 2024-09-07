@@ -3,60 +3,48 @@ import 'package:motu_control/components/fader.dart';
 import 'package:motu_control/components/panner.dart';
 import 'package:motu_control/components/icon_toggle_button.dart';
 import 'package:motu_control/utils/db_slider_utils.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/api/datastore.dart';
+import 'package:motu_control/api/channel_state.dart';
+import 'package:motu_control/utils/constants.dart';
 
 ///
 /// Faders and Panners for channel sends
 ///
 class ChannelSend extends StatelessWidget {
-  final String name;
-  final int inputChannelNumber;
-  final int outputChannelNumber;
-  final Datastore snapshotData;
-  final Function(String, double) valueChanged;
-  final ChannelType inputChannelType;
-  final ChannelType outputChannelType;
+  final ChannelState state;
+  final ChannelState output;
+  final Function(
+    ChannelType,
+    int,
+    ValueType,
+    ChannelType?,
+    int?,
+    double,
+  ) valueChanged;
   final Function(ChannelType, int)? channelClicked;
 
-  const ChannelSend(
-    this.name,
-    this.inputChannelNumber,
-    this.outputChannelNumber,
-    this.snapshotData,
-    this.valueChanged, {
+  const ChannelSend({
+    required this.state,
+    required this.output,
+    required this.valueChanged,
     super.key,
-    this.inputChannelType = ChannelType.chan,
-    this.outputChannelType = ChannelType.aux,
     this.channelClicked,
   });
 
   @override
   Widget build(BuildContext context) {
-    double sendValue = snapshotData.getOutputSendValue(
-          inputChannelType,
-          inputChannelNumber,
-          outputChannelType,
-          outputChannelNumber,
-        ) ??
-        inputForMinusInfdB;
-
-    double panValue = snapshotData.getOutputPanValue(
-          inputChannelType,
-          inputChannelNumber,
-          outputChannelType,
-          outputChannelNumber,
-        ) ??
-        0.0;
+    double sendValue = state.outputValues[output.type]![output.index]!.send;
+    double panValue = state.outputValues[output.type]![output.index]!.pan;
 
     // For groups and reverbs we want to link to the relevant page
     Widget header = TextButton(
       onPressed: () {
         if (channelClicked != null) {
-          channelClicked!(inputChannelType, inputChannelNumber);
+          channelClicked!(state.type, state.index);
         }
       },
       child: Text(
-        name,
+        state.name,
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
@@ -82,13 +70,11 @@ class ChannelSend extends StatelessWidget {
             // so for now set it to -12dB. We could store state of previous value
             // but that would mean a stateful widget.
             valueChanged(
-              snapshotData.getOutputPath(
-                inputChannelType,
-                inputChannelNumber,
-                outputChannelType,
-                outputChannelNumber,
-                ChannelValue.send,
-              ),
+              state.type,
+              state.index,
+              ValueType.send,
+              output.type,
+              output.index,
               sendValue > inputForMinusInfdB
                   ? inputForMinusInfdB
                   : inputForMinus12dB,
@@ -96,36 +82,33 @@ class ChannelSend extends StatelessWidget {
           },
         ),
         Fader(
-          sliderHeight: 440,
           value: sendValue,
-          type: outputChannelType,
+          style: kFaderStyles[output.type]!,
           valueChanged: (value) => {
             valueChanged(
-              snapshotData.getOutputPath(
-                inputChannelType,
-                inputChannelNumber,
-                outputChannelType,
-                outputChannelNumber,
-                ChannelValue.send,
-              ),
+              state.type,
+              state.index,
+              ValueType.send,
+              output.type,
+              output.index,
               value,
             )
           },
         ),
         const SizedBox(height: 20),
         Panner(
+          style: PannerStyle.fromColor(
+              kFaderStyles[output.type]!.activeTrackColor),
           min: -1.0,
           max: 1.0,
           value: panValue,
           valueChanged: (value) => {
             valueChanged(
-              snapshotData.getOutputPath(
-                inputChannelType,
-                inputChannelNumber,
-                outputChannelType,
-                outputChannelNumber,
-                ChannelValue.pan,
-              ),
+              state.type,
+              state.index,
+              ValueType.pan,
+              output.type,
+              output.index,
               value,
             )
           },

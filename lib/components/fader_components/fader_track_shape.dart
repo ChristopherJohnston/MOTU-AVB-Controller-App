@@ -55,7 +55,7 @@ class FaderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
 
     final ColorTween activeTrackColorTween = ColorTween(
         begin: sliderTheme.disabledActiveTrackColor,
-        end: lighten(sliderTheme.activeTrackColor!, 0.22));
+        end: lighten(sliderTheme.activeTrackColor!, 0.1));
     final ColorTween inactiveTrackColorTween = ColorTween(
         begin: sliderTheme.disabledInactiveTrackColor,
         end: sliderTheme.inactiveTrackColor);

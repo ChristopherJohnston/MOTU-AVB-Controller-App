@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:motu_control/utils/constants.dart';
-import 'package:motu_control/api/motu.dart';
+import 'package:motu_control/utils/screen.dart';
+import 'package:motu_control/api/datastore.dart';
+import 'package:motu_control/api/channel_state.dart';
+import 'package:motu_control/api/datastore_api.dart';
+import 'package:motu_control/api/mixer_state.dart';
 import 'package:motu_control/screens/channel_screen.dart';
 import 'package:motu_control/screens/send_screen.dart';
 import 'package:motu_control/screens/error_screen.dart';
@@ -10,135 +14,73 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:motu_control/components/server_chooser.dart';
 
+//
 // SETTINGS
-// Fader visibility is stored in browser local storage at touch-console_faderVisibility
-Map<int, List<int>> auxInputList = {
-  0: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  2: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  4: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  6: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  8: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  10: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  12: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+//
+
+String? deviceUrl = "http://1248.local/datastore";
+//String? deviceUrl = "http://localhost:8888/datastore";
+// String? deviceUrl;
+
+// In Touch console, fader visibility is stored in browser local storage
+// at touch-console_faderVisibility
+
+// Channels to show as inputs to each aux.
+Map<ChannelType, Map<int, List<int>>> auxInputList = {
+  ChannelType.chan: {
+    0: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    2: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    4: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    6: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    8: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    10: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+    12: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
+  },
+  ChannelType.group: {
+    0: [0],
+    2: [0],
+    4: [0],
+    6: [0],
+    8: [0],
+    10: [0],
+    12: [0],
+  }
 };
 
+// Channels to show as inputs to each group.
 Map<int, List<int>> groupInputList = {
   0: [24, 25, 26, 27, 28, 29, 30, 31, 32, 34],
   2: [],
   4: [],
 };
+
+// Active Groups
 List<int> groupList = [0, 2, 4];
+
+// Active Auxes
 List<int> auxList = [0, 2, 4, 6, 8, 10, 12];
 
+//
 // END SETTINGS
+//
 
-class AppSettings {
-  final Map<int, List<ChannelDefinition>> auxInputChannels;
-  final Map<int, List<ChannelDefinition>> groupChannels;
-  final List<int> allInputsList;
-  final List<ChannelDefinition> allInputChannels;
-  final List<ChannelDefinition> groups;
-  final List<ChannelDefinition> reverbChannels;
-  final List<ChannelDefinition> auxes;
-  final List<ChannelDefinition> mixerChannels;
+///
+/// Mixer State
+///
 
-  AppSettings({
-    required this.auxInputChannels,
-    required this.groupChannels,
-    required this.allInputsList,
-    required this.allInputChannels,
-    required this.groups,
-    required this.reverbChannels,
-    required this.auxes,
-  }) : mixerChannels = allInputChannels + groups + reverbChannels;
-}
-
-AppSettings setupIO(Datastore datastore) {
-  Map<int, List<ChannelDefinition>> auxInputChannels = {};
-  for (MapEntry<int, List<int>> channel in auxInputList.entries) {
-    auxInputChannels[channel.key] = channel.value
-        .map(
-          (input) => ChannelDefinition(
-            index: input,
-            type: ChannelType.chan,
-            name: datastore.getMixerChannelName(input),
-          ),
-        )
-        .toList();
-  }
-
-  Map<int, List<ChannelDefinition>> groupChannels = {};
-
-  for (MapEntry<int, List<int>> channel in groupInputList.entries) {
-    groupChannels[channel.key] = channel.value
-        .map(
-          (input) => ChannelDefinition(
-            index: input,
-            type: ChannelType.chan,
-            name: datastore.getMixerChannelName(input),
-          ),
-        )
-        .toList();
-  }
-
-  List<int> allInputsList = datastore.getChannelList("obank", "Mix In");
-
-  final List<ChannelDefinition> allInputChannels = [];
-  for (int channel in allInputsList) {
-    allInputChannels.add(ChannelDefinition(
-      index: channel,
-      type: ChannelType.chan,
-      name: datastore.getMixerChannelName(channel),
-    ));
-  }
-
-  List<ChannelDefinition> groups = groupList
-      .map((int channel) => ChannelDefinition(
-            index: channel,
-            type: ChannelType.group,
-            name: datastore.getGroupName(channel),
-          ))
-      .toList();
-
-  final List<ChannelDefinition> reverbChannels = [0]
-      .map((channel) => ChannelDefinition(
-            index: channel,
-            type: ChannelType.reverb,
-            name: datastore.getReverbName(channel),
-          ))
-      .toList();
-
-  List<ChannelDefinition> auxes = [];
-  for (int channel in auxList) {
-    auxes.add(ChannelDefinition(
-      index: channel,
-      type: ChannelType.aux,
-      name: datastore.getAuxName(channel),
-    ));
-  }
-
-  return AppSettings(
-    auxInputChannels: auxInputChannels,
-    groupChannels: groupChannels,
-    allInputsList: allInputsList,
-    allInputChannels: allInputChannels,
-    groups: groups,
-    reverbChannels: reverbChannels,
-    auxes: auxes,
-  );
-}
-
+// Unique clientId for the Motu API.
 final int clientId = MotuDatastoreApi.getClientId();
 
-enum Page { chan, mixer, group, aux, reverb }
-
+// Create a single route for the app. We will determine
+// which page to display in the build method,
+// depending on the page parameter
 final _router = GoRouter(
   initialLocation: "/mixer/0",
   routes: [
     GoRoute(
       path: "/:page/:channel",
       builder: (context, state) => MainPage(
-        page: Page.values
+        screen: Screen.values
             .firstWhere((e) => e.name == state.pathParameters["page"]),
         channel: int.tryParse(state.pathParameters["channel"] ?? "0") ?? 0,
       ),
@@ -146,11 +88,17 @@ final _router = GoRouter(
   ],
 );
 
+///
+/// Main entry point to the application
+///
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MOTUControlPanel());
 }
 
+///
+/// Main application widget
+///
 class MOTUControlPanel extends StatelessWidget {
   const MOTUControlPanel({super.key});
 
@@ -169,13 +117,18 @@ getSharedPreferences() async {
   return await SharedPreferences.getInstance();
 }
 
+///
+/// Main (and only) page of the app
+/// maintains a Motu Datastore instance and
+/// passes mixer state to the pages.
+///
 class MainPage extends StatefulWidget {
   final int channel;
-  final Page page;
+  final Screen screen;
 
   const MainPage({
     super.key,
-    this.page = Page.mixer,
+    this.screen = Screen.mixer,
     this.channel = 0,
   });
 
@@ -199,18 +152,22 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
 
-    // Get App preferences
-    getSharedPreferences().then(
-      (prefs) async {
-        if (prefs.getString('apiBaseUrl') == null) {
-          await showServerChooser(context, prefs).then((value) {
+    if (deviceUrl != null) {
+      createPollingInstance(deviceUrl!);
+    } else {
+      // Get App preferences to determine MOTU URL
+      getSharedPreferences().then(
+        (prefs) async {
+          if (prefs.getString('apiBaseUrl') == null) {
+            await showServerChooser(context, prefs).then((value) {
+              createPollingInstance(prefs.getString('apiBaseUrl'));
+            });
+          } else {
             createPollingInstance(prefs.getString('apiBaseUrl'));
-          });
-        } else {
-          createPollingInstance(prefs.getString('apiBaseUrl'));
-        }
-      },
-    );
+          }
+        },
+      );
+    }
   }
 
   @override
@@ -224,6 +181,7 @@ class _MainPageState extends State<MainPage> {
     if (datastoreApiInstance == null) {
       return const WaitingScreen(message: "Waiting for server URL");
     }
+
     return StreamBuilder<Datastore>(
       stream: datastoreApiInstance!.stream,
       builder: (
@@ -240,63 +198,50 @@ class _MainPageState extends State<MainPage> {
               return const WaitingScreen();
             case ConnectionState.active:
               {
-                AppSettings settings = setupIO(
-                  snapshot.data!,
+                // Generate the mixer state from the datastore.
+                // This will be passed down to the widgets.
+                MixerState mixerState = MixerState.fromDatastore(
+                  datastore: snapshot.data!,
+                  auxInputList: auxInputList,
+                  groupInputList: groupInputList,
+                  groupList: groupList,
+                  auxList: auxList,
                 );
 
-                switch (widget.page) {
-                  case Page.chan:
-                    ChannelDefinition inputChannel = settings.allInputChannels
-                        .firstWhere((e) => e.index == widget.channel);
-
+                switch (widget.screen) {
+                  case Screen.chan:
                     return ChannelScreen(
-                      inputChannel: inputChannel,
+                      index: widget.channel,
+                      state: mixerState,
                       datastoreApiInstance: datastoreApiInstance!,
-                      snapshot: snapshot,
-                      groups: settings.groups,
-                      auxes: settings.auxes,
                     );
-                  case Page.aux:
-                    List<ChannelDefinition> inputChannels =
-                        settings.auxInputChannels[widget.channel]!;
-
-                    inputChannels.addAll(settings.groups.toList());
-                    inputChannels.addAll(settings.reverbChannels.toList());
+                  case Screen.aux:
                     return SendScreen(
                       sendType: ChannelType.aux,
-                      activeSends: settings.auxes,
-                      inputChannels: inputChannels,
                       channel: widget.channel,
+                      state: mixerState,
                       datastoreApiInstance: datastoreApiInstance!,
-                      snapshot: snapshot,
                     );
-                  case Page.group:
+                  case Screen.group:
                     return SendScreen(
                       sendType: ChannelType.group,
-                      headerIcon: Icons.group,
-                      activeSends: settings.groups,
-                      inputChannels: settings.groupChannels[widget.channel]!,
+                      headerIcon: kGroupIcon,
                       channel: widget.channel,
+                      state: mixerState,
                       datastoreApiInstance: datastoreApiInstance!,
-                      snapshot: snapshot,
                     );
-                  case Page.reverb:
+                  case Screen.reverb:
                     return SendScreen(
                       sendType: ChannelType.reverb,
-                      headerIcon: Icons.double_arrow,
-                      activeSends: settings.reverbChannels,
-                      inputChannels: settings.allInputChannels,
+                      headerIcon: kReverbIcon,
                       channel: widget.channel,
+                      state: mixerState,
                       datastoreApiInstance: datastoreApiInstance!,
-                      snapshot: snapshot,
                     );
                   default:
                     return MixerScreen(
-                      inputChannels: settings.mixerChannels,
+                      state: mixerState,
                       datastoreApiInstance: datastoreApiInstance!,
-                      groups: settings.groups,
-                      auxes: settings.auxes,
-                      snapshot: snapshot,
                     );
                 }
               }
