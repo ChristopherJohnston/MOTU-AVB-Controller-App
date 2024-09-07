@@ -17,6 +17,9 @@ class MixerState {
   final Map<int, ChannelState> allInputChannelStates;
   final Map<ChannelType, Map<int, ChannelState>> outputStates;
 
+  // Presets
+  final Map<int, String> devicePresets;
+
   MixerState({
     required this.allInputsList,
     required this.allGroupsList,
@@ -24,6 +27,7 @@ class MixerState {
     required this.sendInputList,
     required this.allInputChannelStates,
     required this.outputStates,
+    required this.devicePresets,
   });
 
   static MixerState fromDatastore({
@@ -80,23 +84,25 @@ class MixerState {
     };
 
     return MixerState(
-        allInputsList: allInputsList,
-        allGroupsList: groupList,
-        allAuxesList: auxList,
-        sendInputList: sendInputList,
-        allInputChannelStates: allInputChannelStates,
-        outputStates: {
-          ChannelType.aux: allAuxChannelStates,
-          ChannelType.group: allGroupChannelStates,
-          ChannelType.main: {
-            0: datastore.getOutputChannelState(ChannelType.main, 0)
-          },
-          ChannelType.monitor: {
-            0: datastore.getOutputChannelState(ChannelType.monitor, 0)
-          },
-          ChannelType.reverb: {
-            0: datastore.getOutputChannelState(ChannelType.reverb, 0)
-          },
-        });
+      allInputsList: allInputsList,
+      allGroupsList: groupList,
+      allAuxesList: auxList,
+      sendInputList: sendInputList,
+      allInputChannelStates: allInputChannelStates,
+      outputStates: {
+        ChannelType.aux: allAuxChannelStates,
+        ChannelType.group: allGroupChannelStates,
+        ChannelType.main: {
+          0: datastore.getOutputChannelState(ChannelType.main, 0)
+        },
+        ChannelType.monitor: {
+          0: datastore.getOutputChannelState(ChannelType.monitor, 0)
+        },
+        ChannelType.reverb: {
+          0: datastore.getOutputChannelState(ChannelType.reverb, 0)
+        },
+      },
+      devicePresets: datastore.getDevicePresets(),
+    );
   }
 }

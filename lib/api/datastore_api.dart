@@ -146,6 +146,18 @@ class MotuDatastoreApi {
     }
   }
 
+  ///
+  /// Loads a device preset at the given index
+  ///
+  void loadPreset(int presetIndex) async {
+    await http.patch(
+      getUri("ext/presets/load"),
+      body: {
+        'json': '{"value":"$presetIndex"}',
+      },
+    );
+  }
+
   void _setValue({
     required ChannelType type,
     required int index,

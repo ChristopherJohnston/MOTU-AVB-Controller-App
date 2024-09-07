@@ -388,4 +388,17 @@ class Datastore {
       format: _getChannelFormat(type, index),
     );
   }
+
+  ///
+  /// Builds a Map of device preset indices and names.
+  ///
+  Map<int, String> getDevicePresets() {
+    String presetsStr = _data["ext/presets/device"];
+    List<String> presets = presetsStr.split(":");
+    Map<int, String> presetsMap = {};
+    for (int i = 0; i < presets.length; i += 2) {
+      presetsMap[int.parse(presets[i])!] = presets[i + 1];
+    }
+    return presetsMap;
+  }
 }

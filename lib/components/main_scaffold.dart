@@ -1,19 +1,25 @@
 import 'package:flutter_svg/svg.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:motu_control/api/datastore_api.dart';
 import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/utils/screen.dart';
+import 'package:motu_control/api/mixer_state.dart';
 
 class MainScaffold extends StatelessWidget {
   final List<Widget> actions;
   final Widget? title;
   final Widget body;
+  final MixerState? state;
+  final MotuDatastoreApi? datastoreApiInstance;
 
   const MainScaffold({
     super.key,
     this.actions = const [],
     this.title,
     required this.body,
+    this.state,
+    this.datastoreApiInstance,
   });
 
   @override
@@ -64,6 +70,27 @@ class MainScaffold extends StatelessWidget {
                 ],
               ),
             ),
+            (state != null)
+                ? ListTile(
+                    leading: const Icon(Icons.open_in_new),
+                    title: DropdownMenu<int>(
+                      hintText: "Select a preset",
+                      label: const Text("Load Preset"),
+                      dropdownMenuEntries: state!.devicePresets.entries.map(
+                        (preset) {
+                          return DropdownMenuEntry<int>(
+                            value: preset.key,
+                            label: preset.value,
+                          );
+                        },
+                      ).toList(),
+                      onSelected: (int? value) {
+                        Navigator.pop(context);
+                        datastoreApiInstance?.loadPreset(value!);
+                      },
+                    ),
+                  )
+                : const Placeholder(),
             ListTile(
               leading: const Icon(kMixerIcon),
               title: const Text('Mixer'),

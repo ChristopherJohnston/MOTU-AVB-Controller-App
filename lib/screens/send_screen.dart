@@ -173,6 +173,8 @@ class SendScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
+      datastoreApiInstance: datastoreApiInstance,
+      state: state,
       actions: [
         SendHeader(
           label: sendType.name,

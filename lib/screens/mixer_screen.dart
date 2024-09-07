@@ -121,6 +121,8 @@ class _MixerScreenState extends State<MixerScreen> {
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
+      datastoreApiInstance: widget.datastoreApiInstance,
+      state: widget.state,
       actions: [
         OnFaderSelection(
           outputType: outputType,
