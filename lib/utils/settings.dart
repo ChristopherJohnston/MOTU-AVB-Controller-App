@@ -19,6 +19,7 @@ class InputSettings {
   List<int> groupList;
   List<int> auxList;
   String? deviceUrl;
+  String? base64EncodedString;
 
   // Constructor
   InputSettings({
@@ -27,6 +28,7 @@ class InputSettings {
     required this.groupList,
     required this.auxList,
     this.deviceUrl,
+    this.base64EncodedString,
   });
 
   factory InputSettings.defaults() {
@@ -74,7 +76,8 @@ class InputSettings {
   ///
   /// Create a settings object from the provided json.
   ///
-  factory InputSettings.fromJson(Map<String, dynamic> json) {
+  factory InputSettings.fromJson(
+      String base64EncodedString, Map<String, dynamic> json) {
     String? deviceUrl = json['deviceUrl'];
 
     Map<ChannelType, Map<int, List<int>>> auxInputList = {};
@@ -107,11 +110,12 @@ class InputSettings {
       groupList: groupList,
       auxList: auxList,
       deviceUrl: deviceUrl,
+      base64EncodedString: base64EncodedString,
     );
   }
 
   factory InputSettings.fromBase64(String base64EncodedString) {
     final json = jsonDecode(utf8.decode(base64Decode(base64EncodedString)));
-    return InputSettings.fromJson(json);
+    return InputSettings.fromJson(base64EncodedString, json);
   }
 }

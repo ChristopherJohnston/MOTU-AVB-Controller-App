@@ -31,8 +31,8 @@ final _router = GoRouter(
         final channel =
             int.tryParse(state.pathParameters["channel"] ?? "0") ?? 0;
 
-        final deviceUrl = state.uri.queryParameters["deviceUrl"];
-        final settings = state.uri.queryParameters["settings"];
+        String? deviceUrl = state.uri.queryParameters["deviceUrl"];
+        String? settings = state.uri.queryParameters["settings"];
 
         InputSettings? settingsObj =
             (settings != null) ? InputSettings.fromBase64(settings) : null;
@@ -86,15 +86,15 @@ class MainPage extends StatefulWidget {
   final int channel;
   final Screen screen;
   final String? deviceUrl;
-  final InputSettings settings;
+  final InputSettings? settings;
 
-  MainPage({
+  const MainPage({
     super.key,
     this.screen = Screen.mixer,
     this.channel = 0,
     this.deviceUrl,
-    InputSettings? settings,
-  }) : settings = settings ?? InputSettings.defaults();
+    this.settings,
+  });
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -102,9 +102,11 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   MotuDatastoreApi? datastoreApiInstance;
+  InputSettings? settings;
 
-  void createPollingInstance(String apiBaseUrl) {
+  void createPollingInstance(String apiBaseUrl, InputSettings settingsObj) {
     setState(() {
+      settings = settingsObj;
       datastoreApiInstance = MotuDatastoreApi(
         apiBaseUrl,
         clientId: clientId,
@@ -116,23 +118,39 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
 
-    if (widget.deviceUrl != null) {
-      // use querystring-provided url
-      createPollingInstance(widget.deviceUrl!);
-    } else {
-      // Get App preferences to determine MOTU URL
-      getSharedPreferences().then(
-        (prefs) async {
+    getSharedPreferences().then(
+      (prefs) async {
+        InputSettings? settingsObj;
+        if (widget.settings == null) {
+          // Try to get settings string from shared preferences
+          String? settingsStr = prefs.getString('settings');
+          settingsObj = (settingsStr != null)
+              ? InputSettings.fromBase64(settingsStr)
+              : InputSettings.defaults();
+        } else {
+          // Settings was in querystring - Write to shared preferences
+          prefs.setString('settings', widget.settings!.base64EncodedString!);
+          settingsObj = widget.settings;
+        }
+
+        if (widget.deviceUrl != null || settingsObj?.deviceUrl != null) {
+          // device url was in querystring or settings. Write to shared preferences
+          String apiBaseUrl = widget.deviceUrl ?? settingsObj!.deviceUrl!;
+          prefs.setString('apiBaseUrl', apiBaseUrl);
+          createPollingInstance(apiBaseUrl, settingsObj!);
+        } else {
+          // Try to get device url from shared preferences, otherwise show chooser
           if (prefs.getString('apiBaseUrl') == null) {
             await showServerChooser(context, prefs).then((value) {
-              createPollingInstance(prefs.getString('apiBaseUrl'));
+              createPollingInstance(
+                  prefs.getString('apiBaseUrl'), settingsObj!);
             });
           } else {
-            createPollingInstance(prefs.getString('apiBaseUrl'));
+            createPollingInstance(prefs.getString('apiBaseUrl'), settingsObj!);
           }
-        },
-      );
-    }
+        }
+      },
+    );
   }
 
   @override
@@ -167,10 +185,10 @@ class _MainPageState extends State<MainPage> {
                 // This will be passed down to the widgets.
                 MixerState mixerState = MixerState.fromDatastore(
                   datastore: snapshot.data!,
-                  auxInputList: widget.settings.auxInputList,
-                  groupInputList: widget.settings.groupInputList,
-                  groupList: widget.settings.groupList,
-                  auxList: widget.settings.auxList,
+                  auxInputList: settings!.auxInputList,
+                  groupInputList: settings!.groupInputList,
+                  groupList: settings!.groupList,
+                  auxList: settings!.auxList,
                 );
 
                 switch (widget.screen) {
