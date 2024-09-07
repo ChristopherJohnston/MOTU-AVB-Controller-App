@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:motu_control/utils/constants.dart';
 import 'package:motu_control/utils/screen.dart';
+import 'package:motu_control/utils/settings.dart';
 import 'package:motu_control/api/datastore.dart';
 import 'package:motu_control/api/channel_state.dart';
 import 'package:motu_control/api/datastore_api.dart';
@@ -14,60 +15,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:motu_control/components/server_chooser.dart';
 
-//
-// SETTINGS
-//
-
-// String? deviceUrl = "http://1248.local/datastore";
-//String? deviceUrl = "http://localhost:8888/datastore";
-String? deviceUrl;
-
-// In Touch console, fader visibility is stored in browser local storage
-// at touch-console_faderVisibility
-
-// Channels to show as inputs to each aux.
-Map<ChannelType, Map<int, List<int>>> auxInputList = {
-  ChannelType.chan: {
-    0: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    2: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    4: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    6: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    8: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    10: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-    12: [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 35],
-  },
-  ChannelType.group: {
-    0: [0],
-    2: [0],
-    4: [0],
-    6: [0],
-    8: [0],
-    10: [0],
-    12: [0],
-  }
-};
-
-// Channels to show as inputs to each group.
-Map<int, List<int>> groupInputList = {
-  0: [24, 25, 26, 27, 28, 29, 30, 31, 32, 34],
-  2: [],
-  4: [],
-};
-
-// Active Groups
-List<int> groupList = [0, 2, 4];
-
-// Active Auxes
-List<int> auxList = [0, 2, 4, 6, 8, 10, 12];
-
-//
-// END SETTINGS
-//
-
-///
-/// Mixer State
-///
-
 // Unique clientId for the Motu API.
 final int clientId = MotuDatastoreApi.getClientId();
 
@@ -79,11 +26,24 @@ final _router = GoRouter(
   routes: [
     GoRoute(
       path: "/:page/:channel",
-      builder: (context, state) => MainPage(
-        screen: Screen.values
-            .firstWhere((e) => e.name == state.pathParameters["page"]),
-        channel: int.tryParse(state.pathParameters["channel"] ?? "0") ?? 0,
-      ),
+      builder: (context, state) {
+        final page = state.pathParameters["page"];
+        final channel =
+            int.tryParse(state.pathParameters["channel"] ?? "0") ?? 0;
+
+        final deviceUrl = state.uri.queryParameters["deviceUrl"];
+        final settings = state.uri.queryParameters["settings"];
+
+        InputSettings? settingsObj =
+            (settings != null) ? InputSettings.fromBase64(settings) : null;
+
+        return MainPage(
+          screen: Screen.values.firstWhere((e) => e.name == page),
+          channel: channel,
+          deviceUrl: deviceUrl ?? settingsObj?.deviceUrl,
+          settings: settingsObj,
+        );
+      },
     ),
   ],
 );
@@ -125,12 +85,16 @@ getSharedPreferences() async {
 class MainPage extends StatefulWidget {
   final int channel;
   final Screen screen;
+  final String? deviceUrl;
+  final InputSettings settings;
 
-  const MainPage({
+  MainPage({
     super.key,
     this.screen = Screen.mixer,
     this.channel = 0,
-  });
+    this.deviceUrl,
+    InputSettings? settings,
+  }) : settings = settings ?? InputSettings.defaults();
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -152,8 +116,9 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
 
-    if (deviceUrl != null) {
-      createPollingInstance(deviceUrl!);
+    if (widget.deviceUrl != null) {
+      // use querystring-provided url
+      createPollingInstance(widget.deviceUrl!);
     } else {
       // Get App preferences to determine MOTU URL
       getSharedPreferences().then(
@@ -202,10 +167,10 @@ class _MainPageState extends State<MainPage> {
                 // This will be passed down to the widgets.
                 MixerState mixerState = MixerState.fromDatastore(
                   datastore: snapshot.data!,
-                  auxInputList: auxInputList,
-                  groupInputList: groupInputList,
-                  groupList: groupList,
-                  auxList: auxList,
+                  auxInputList: widget.settings.auxInputList,
+                  groupInputList: widget.settings.groupInputList,
+                  groupList: widget.settings.groupList,
+                  auxList: widget.settings.auxList,
                 );
 
                 switch (widget.screen) {
