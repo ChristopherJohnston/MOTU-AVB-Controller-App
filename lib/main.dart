@@ -18,9 +18,9 @@ import 'package:motu_control/components/server_chooser.dart';
 // SETTINGS
 //
 
-String? deviceUrl = "http://1248.local/datastore";
+// String? deviceUrl = "http://1248.local/datastore";
 //String? deviceUrl = "http://localhost:8888/datastore";
-// String? deviceUrl;
+String? deviceUrl;
 
 // In Touch console, fader visibility is stored in browser local storage
 // at touch-console_faderVisibility
