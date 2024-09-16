@@ -397,7 +397,7 @@ class Datastore {
     List<String> presets = presetsStr.split(":");
     Map<int, String> presetsMap = {};
     for (int i = 0; i < presets.length; i += 2) {
-      presetsMap[int.parse(presets[i])!] = presets[i + 1];
+      presetsMap[int.parse(presets[i])] = presets[i + 1];
     }
     return presetsMap;
   }

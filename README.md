@@ -11,9 +11,29 @@ This app is inspired by and uses components from the [MOTU Simple Control Panel]
 
 ### Demo Site
 
-The app is deployed to: https://motu-avb-controller.web.app
+A Live demo using the development server can be found [here](https://bit.ly/motu-control-main-hp-mix).
 
-N.B. due to CORS restrictions on mixed http/https content it is not possible to connect to a local controller from this page. One way around this is to place your controller url behind a secure proxy, e.g. nginx proxy manager. Alternatively, host the app locally.
+### Sreenshots
+
+#### Screen Recording
+
+![Demo Screen Recording](./screenshots/screen-recording.gif)
+
+#### Aux Page
+
+![Aux Page](./screenshots/aux-page.png)
+
+#### Mixer Page
+
+![Mixer Page](./screenshots/mixer-page.png)
+
+#### Group Page
+
+![Group Page](./screenshots/group-page.png)
+
+### Preset Selection
+
+![Preset Selection](./screenshots/preset-selection.png)
 
 ### Encoding Settings
 
@@ -24,7 +44,10 @@ The app can take json settings as base64-encoded string in the querystring. For 
 A good use case for this app is to have links directly to a page with a particular setup using the path and base-64 encoded settings in querystring. For example: [link with base64-encoded settings in querstring](https://motu-avb-controller.web.app/#/aux/0?settings=eyJkZXZpY2VVcmwiOiJodHRwOi8vbG9jYWxob3N0Ojg4ODgvZGF0YXN0b3JlIiwiYXV4TGlzdCI6WzAsMiw0LDYsOCwxMCwxMl0sImdyb3VwTGlzdCI6WzAsMiw0XSwiZ3JvdXBJbnB1dExpc3QiOnsiMCI6WzI0LDI1LDI2LDI3LDI4LDI5LDMwLDMxLDMyLDM0XSwiMiI6W10sIjQiOltdfSwiYXV4SW5wdXRMaXN0Ijp7ImNoYW4iOnsiMCI6WzAsMSwyLDMsNCw2LDgsMTAsMTIsMTQsMTYsMTgsMjAsMjIsMjMsMzVdLCIyIjpbMCwxLDIsMyw0LDYsOCwxMCwxMiwxNCwxNiwxOCwyMCwyMiwyMywzNV0sIjQiOlswLDEsMiwzLDQsNiw4LDEwLDEyLDE0LDE2LDE4LDIwLDIyLDIzLDM1XSwiNiI6WzAsMSwyLDMsNCw2LDgsMTAsMTIsMTQsMTYsMTgsMjAsMjIsMjMsMzVdLCI4IjpbMCwxLDIsMyw0LDYsOCwxMCwxMiwxNCwxNiwxOCwyMCwyMiwyMywzNV0sIjEwIjpbMCwxLDIsMyw0LDYsOCwxMCwxMiwxNCwxNiwxOCwyMCwyMiwyMywzNV0sIjEyIjpbMCwxLDIsMyw0LDYsOCwxMCwxMiwxNCwxNiwxOCwyMCwyMiwyMywzNV19LCJncm91cCI6eyIwIjpbMF0sIjIiOlswXSwiNCI6WzBdLCI2IjpbMF0sIjgiOlswXSwiMTAiOlswXSwiMTIiOlswXX19fQ==
 )
 
-With these links, it's possible to create QR codes for each headphone aux mix and place them around the studio next to headphone stations for artists to directly manipulate their own headphone mixes from the app.
+With these links, it's possible to create QR codes for each headphone aux mix and place them around the studio next to headphone stations for artists to directly manipulate their own headphone mixes from the app. e.g
+
+![QR Code Example](./screenshots/qr-code-example.jpeg)
+
 
 # Resources
 
